@@ -337,6 +337,37 @@ Methods
     
        Get the frequency of the source of the timer.
 
+.. only:: port_wipy
+
+    Constants
+    ---------
+
+    .. data:: Timer.A
+
+    .. data:: Timer.B
+
+        select the timer channel. Must be ORed to use both channels on a 32-bit timer.
+
+    .. data:: Timer.ONE_SHOT
+
+    .. data:: Timer.PERIODIC
+
+    .. data:: Timer.EDGE_COUNT
+
+    .. data:: Timer.EDGE_TIME
+
+    .. data:: Timer.PWM
+
+        select the timer operating mode.
+
+    .. data:: Timer.POSITIVE
+    
+    .. data:: Timer.NEGATIVE
+    
+        select the PWM polarity or the edge detection polarity. In the latter case they might
+        be ORed so that edge detection occurs on both edges.
+
+
 class TimerChannel --- setup a channel for a timer
 ==================================================
 
