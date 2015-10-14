@@ -46,8 +46,8 @@ inside ``/flash/sys/`` because it's actually saved bypassing the user file syste
 assured that it was successfully transferred, and it has been signed with a MD5 checksum to
 verify its integrity. Now, reset the MCU by pressing the switch on the board, or by typing::
 
-    import pyb
-    pyb.reset()
+    import machine
+    machine.reset()
 
 Boot modes
 ----------
@@ -91,7 +91,7 @@ The heart beat LED
 By default the heart beat LED flashes once every 4s to signal that the system is
 alive. This can be overridden through the HeartBeat class:
 
-``pyb.HeartBeat().disable()``
+``machine.HeartBeat().disable()``
 
 There are currently 2 kinds of errors that you might see:
 
