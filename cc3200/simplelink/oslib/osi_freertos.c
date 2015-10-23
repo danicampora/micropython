@@ -437,7 +437,7 @@ void vSimpleLinkSpawnTask(void *pvParameters)
 				Msg.pEntry(Msg.pValue);
 		}
         // set the alive flag for the wdt
-        pybwdt_sl_alive();
+        pyb_wdt_sl_alive();
 	}
 }
 

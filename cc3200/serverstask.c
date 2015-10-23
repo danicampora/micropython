@@ -57,7 +57,7 @@ typedef struct {
  ******************************************************************************/
 static servers_data_t servers_data = {.timeout = SERVERS_DEF_TIMEOUT_MS, .enabled = false, .do_disable = false,
                                       .do_enable = false, .do_reset = false};
-static volatile bool sleep_sockets = false;
+static volatile bool server_enter_sleep = false;
 
 /******************************************************************************
  DECLARE PRIVATE FUNCTIONS
@@ -73,7 +73,6 @@ char servers_pass[SERVERS_USER_PASS_LEN_MAX + 1];
  DECLARE PUBLIC FUNCTIONS
  ******************************************************************************/
 void TASK_Servers (void *pvParameters) {
-
     bool cycle = false;
 
     strcpy (servers_user, SERVERS_DEF_USER);
@@ -83,7 +82,6 @@ void TASK_Servers (void *pvParameters) {
     ftp_init();
 
     for ( ;; ) {
-
         if (servers_data.do_enable) {
             // enable network services
             telnet_enable();
@@ -91,16 +89,14 @@ void TASK_Servers (void *pvParameters) {
             // now set/clear the flags
             servers_data.enabled = true;
             servers_data.do_enable = false;
-        }
-        else if (servers_data.do_disable) {
+        } else if (servers_data.do_disable) {
             // disable network services
             telnet_disable();
             ftp_disable();
             // now clear the flags
             servers_data.do_disable = false;
             servers_data.enabled = false;
-        }
-        else if (servers_data.do_reset) {
+        } else if (servers_data.do_reset) {
             // resetting the servers is needed to prevent half-open sockets
             servers_data.do_reset = false;
             if (servers_data.enabled) {
@@ -114,20 +110,19 @@ void TASK_Servers (void *pvParameters) {
 
         if (cycle) {
             telnet_run();
-        }
-        else {
+        } else {
             ftp_run();
         }
 
-        if (sleep_sockets) {
-            sleep_sockets = false;
-            pybwdt_srv_sleeping(true);
+        if (server_enter_sleep) {
+            pyb_wdt_srv_sleeping(true);
             modusocket_enter_sleep();
-            pybwdt_srv_sleeping(false);
+            while (server_enter_sleep);
+            pyb_wdt_srv_sleeping(false);
         }
 
         // set the alive flag for the wdt
-        pybwdt_srv_alive();
+        pyb_wdt_srv_alive();
 
         // move to the next cycle
         cycle = cycle ? false : true;
@@ -156,9 +151,13 @@ bool servers_are_enabled (void) {
     return servers_data.enabled;
 }
 
-void server_sleep_sockets (void) {
-    sleep_sockets = true;
-    HAL_Delay (SERVERS_CYCLE_TIME_MS + 1);
+void server_sleep_enter (void) {
+    server_enter_sleep = true;
+    HAL_Delay ((SERVERS_CYCLE_TIME_MS * 3) + 1);
+}
+
+void server_sleep_exit (void) {
+    server_enter_sleep = false;
 }
 
 void servers_close_socket (int16_t *sd) {

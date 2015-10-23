@@ -72,7 +72,7 @@ int main (void) {
 #endif
 
     // Init the watchdog
-    pybwdt_init0();
+    pyb_wdt_init0();
 
 #ifdef DEBUG
     ASSERT (OSI_OK == osi_TaskCreate(TASK_Micropython,

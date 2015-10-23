@@ -70,18 +70,18 @@ STATIC pyb_wdt_obj_t pyb_wdt_obj = {.servers = false, .servers_sleeping = false,
  ******************************************************************************/
 // must be called in main.c just after initializing the hal
 __attribute__ ((section (".boot")))
-void pybwdt_init0 (void) {
+void pyb_wdt_init0 (void) {
 }
 
-void pybwdt_srv_alive (void) {
+void pyb_wdt_srv_alive (void) {
     pyb_wdt_obj.servers = true;
 }
 
-void pybwdt_srv_sleeping (bool state) {
+void pyb_wdt_srv_sleeping (bool state) {
     pyb_wdt_obj.servers_sleeping = state;
 }
 
-void pybwdt_sl_alive (void) {
+void pyb_wdt_sl_alive (void) {
     pyb_wdt_obj.simplelink = true;
 }
 

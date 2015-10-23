@@ -258,7 +258,7 @@ void pyb_sleep_sleep (void) {
     // do we need network wake-up?
     if (pybsleep_data.wlan_obj->irq_enabled) {
         MAP_PRCMLPDSWakeupSourceEnable (PRCM_LPDS_HOST_IRQ);
-        server_sleep_sockets();
+        server_sleep_enter();
     } else {
         MAP_PRCMLPDSWakeupSourceDisable (PRCM_LPDS_HOST_IRQ);
     }
@@ -273,6 +273,9 @@ void pyb_sleep_sleep (void) {
 
     // an exception is always raised when exiting suspend mode
     enable_irq(primsk);
+
+    // take the server out of sleep mode
+    server_sleep_exit();
 }
 
 void pyb_sleep_deepsleep (void) {

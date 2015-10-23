@@ -198,8 +198,7 @@ void telnet_run (void) {
                     if ((result = telnet_process_credential (servers_pass, rxLen))) {
                         if ((telnet_data.credentialsValid = telnet_data.credentialsValid && (result > 0 ? true : false))) {
                             telnet_data.substate.connected = E_TELNET_STE_SUB_SND_REPL_OPTIONS;
-                        }
-                        else {
+                        } else {
                             telnet_data.substate.connected = E_TELNET_STE_SUB_INVALID_LOGGIN;
                         }
                     }
@@ -336,8 +335,7 @@ static void telnet_wait_for_connection (void) {
     telnet_data.n_sd = sl_Accept(telnet_data.sd, (SlSockAddr_t *)&sClientAddress, (SlSocklen_t *)&in_addrSize);
     if (telnet_data.n_sd == SL_EAGAIN) {
         return;
-    }
-    else {
+    } else {
         if (telnet_data.n_sd <= 0) {
             // error
             telnet_reset();
@@ -375,11 +373,9 @@ static telnet_result_t telnet_send_non_blocking (void *data, _i16 Len) {
     if (result > 0) {
         telnet_data.txRetries = 0;
         return E_TELNET_RESULT_OK;
-    }
-    else if ((TELNET_TX_RETRIES_MAX >= ++telnet_data.txRetries) && (result == SL_EAGAIN)) {
+    } else if ((TELNET_TX_RETRIES_MAX >= ++telnet_data.txRetries) && (result == SL_EAGAIN)) {
         return E_TELNET_RESULT_AGAIN;
-    }
-    else {
+    } else {
         // error
         telnet_reset();
         return E_TELNET_RESULT_FAILED;
@@ -395,8 +391,7 @@ static telnet_result_t telnet_recv_text_non_blocking (void *buff, _i16 Maxlen, _
         if (*rxLen > 0) {
             return E_TELNET_RESULT_OK;
         }
-    }
-    else if (*rxLen != SL_EAGAIN) {
+    } else if (*rxLen != SL_EAGAIN) {
         // error
         telnet_reset();
         return E_TELNET_RESULT_FAILED;
@@ -429,7 +424,6 @@ static int telnet_process_credential (char *credential, _i16 rxLen) {
     // if a '\r' is found, or the length exceeds the max username length
     if ((p = memchr(telnet_data.rxBuffer, '\r', telnet_data.rxWindex)) || (telnet_data.rxWindex >= SERVERS_USER_PASS_LEN_MAX)) {
         uint8_t len = p - telnet_data.rxBuffer;
-
         telnet_data.rxWindex = 0;
         if ((len > 0) && (memcmp(credential, telnet_data.rxBuffer, MAX(len, strlen(credential))) == 0)) {
             return 1;
@@ -450,12 +444,10 @@ static void telnet_parse_input (uint8_t *str, int16_t *len) {
                 mpexception_keyboard_nlr_jump();
                 (*len)--;
                 _str++;
-            }
-            else {
+            } else {
                 *str++ = *_str++;
             }
-        }
-        else {
+        } else {
             // in case we have received an incomplete telnet option, unlikely, but possible
             _str += MIN(3, *len);
             *len -= MIN(3, *len);
@@ -472,8 +464,7 @@ static bool telnet_send_with_retries (int16_t sd, const void *pBuf, int16_t len)
             _i16 result = sl_Send(sd, pBuf, len, 0);
             if (result > 0) {
                 return true;
-            }
-            else if (SL_EAGAIN != result) {
+            } else if (SL_EAGAIN != result) {
                 return false;
             }
             // start with the default delay and increment it on each retry

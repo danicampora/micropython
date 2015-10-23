@@ -65,7 +65,8 @@ extern void servers_reset (void);
 extern bool servers_are_enabled (void);
 extern void servers_close_socket (int16_t *sd);
 extern void servers_set_login (char *user, char *pass);
-extern void server_sleep_sockets (void);
+extern void server_sleep_enter (void);
+extern void server_sleep_exit (void);
 extern void servers_set_timeout (uint32_t timeout);
 extern uint32_t servers_get_timeout (void);
 
