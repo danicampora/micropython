@@ -149,8 +149,8 @@ STATIC wlan_obj_t wlan_obj = {
         .ssid = MICROPY_PORT_WLAN_AP_SSID,
         .key = MICROPY_PORT_WLAN_AP_KEY,
         .mac = {0},
-        .ssid_o = {0},
-        .bssid = {0},
+//        .ssid_o = {0},
+//        .bssid = {0},
     #if (MICROPY_PORT_HAS_TELNET || MICROPY_PORT_HAS_FTP)
         .servers_enabled = false,
     #endif
@@ -210,11 +210,11 @@ void SimpleLinkWlanEventHandler(SlWlanEvent_t *pWlanEvent) {
     {
         case SL_WLAN_CONNECT_EVENT:
         {
-            slWlanConnectAsyncResponse_t *pEventData = &pWlanEvent->EventData.STAandP2PModeWlanConnected;
+//            slWlanConnectAsyncResponse_t *pEventData = &pWlanEvent->EventData.STAandP2PModeWlanConnected;
             // copy the new connection data
-            memcpy(wlan_obj.bssid, pEventData->bssid, SL_BSSID_LENGTH);
-            memcpy(wlan_obj.ssid_o, pEventData->ssid_name, pEventData->ssid_len);
-            wlan_obj.ssid_o[pEventData->ssid_len] = '\0';
+//            memcpy(wlan_obj.bssid, pEventData->bssid, SL_BSSID_LENGTH);
+//            memcpy(wlan_obj.ssid_o, pEventData->ssid_name, pEventData->ssid_len);
+//            wlan_obj.ssid_o[pEventData->ssid_len] = '\0';
             SET_STATUS_BIT(wlan_obj.status, STATUS_BIT_CONNECTION);
         #if (MICROPY_PORT_HAS_TELNET || MICROPY_PORT_HAS_FTP)
             // we must reset the servers in case that the last connection
@@ -228,15 +228,19 @@ void SimpleLinkWlanEventHandler(SlWlanEvent_t *pWlanEvent) {
             CLR_STATUS_BIT(wlan_obj.status, STATUS_BIT_IP_ACQUIRED);
         #if (MICROPY_PORT_HAS_TELNET || MICROPY_PORT_HAS_FTP)
             servers_reset();
+            servers_wlan_cycle_power();
         #endif
+            break;
+        case SL_WLAN_SMART_CONFIG_COMPLETE_EVENT:
+            wlan_obj.smartconfig = false;
             break;
         case SL_WLAN_STA_CONNECTED_EVENT:
         {
-            slPeerInfoAsyncResponse_t *pEventData = &pWlanEvent->EventData.APModeStaConnected;
+//            slPeerInfoAsyncResponse_t *pEventData = &pWlanEvent->EventData.APModeStaConnected;
             // get the mac address and name of the connected device
-            memcpy(wlan_obj.bssid, pEventData->mac, SL_BSSID_LENGTH);
-            memcpy(wlan_obj.ssid_o, pEventData->go_peer_device_name, pEventData->go_peer_device_name_len);
-            wlan_obj.ssid_o[pEventData->go_peer_device_name_len] = '\0';
+//            memcpy(wlan_obj.bssid, pEventData->mac, SL_BSSID_LENGTH);
+//            memcpy(wlan_obj.ssid_o, pEventData->go_peer_device_name, pEventData->go_peer_device_name_len);
+//            wlan_obj.ssid_o[pEventData->go_peer_device_name_len] = '\0';
             SET_STATUS_BIT(wlan_obj.status, STATUS_BIT_CONNECTION);
         #if (MICROPY_PORT_HAS_TELNET || MICROPY_PORT_HAS_FTP)
             // we must reset the servers in case that the last connection
@@ -249,6 +253,7 @@ void SimpleLinkWlanEventHandler(SlWlanEvent_t *pWlanEvent) {
             CLR_STATUS_BIT(wlan_obj.status, STATUS_BIT_CONNECTION);
         #if (MICROPY_PORT_HAS_TELNET || MICROPY_PORT_HAS_FTP)
             servers_reset();
+            servers_wlan_cycle_power();
         #endif
             break;
         case SL_WLAN_P2P_DEV_FOUND_EVENT:
@@ -420,9 +425,6 @@ void wlan_sl_init (int8_t mode, const char *ssid, uint8_t ssid_len, uint8_t auth
     // close any active connections
     wlan_sl_disconnect();
 
-    // Remove all profiles
-    ASSERT_ON_ERROR(sl_WlanProfileDel(0xFF));
-
     // Enable the DHCP client
     uint8_t value = 1;
     ASSERT_ON_ERROR(sl_NetCfgSet(SL_IPV4_STA_P2P_CL_DHCP_ENABLE, 1, 1, &value));
@@ -491,7 +493,7 @@ void wlan_sl_init (int8_t mode, const char *ssid, uint8_t ssid_len, uint8_t auth
     } else { // STA and P2P modes
         ASSERT_ON_ERROR(sl_WlanSet(SL_WLAN_CFG_GENERAL_PARAM_ID, WLAN_GENERAL_PARAM_OPT_STA_TX_POWER,
                                    sizeof(ucPower), (unsigned char *)&ucPower));
-        // set connection policy to Auto + Fast (tries to connect to the last connected AP)
+        // set connection policy to Auto + Fast (tries to connect to the last AP)
         ASSERT_ON_ERROR(sl_WlanPolicySet(SL_POLICY_CONNECTION, SL_CONNECTION_POLICY(1, 1, 0, 0, 0), NULL, 0));
     }
 
@@ -547,6 +549,12 @@ void wlan_set_current_time (uint32_t seconds_since_2000) {
     sl_DevSet(SL_DEVICE_GENERAL_CONFIGURATION, SL_DEVICE_GENERAL_CONFIGURATION_DATE_TIME, sizeof(SlDateTime_t), (_u8 *)(&sl_datetime));
 }
 
+void wlan_off_on (void) {
+    // no need to lock the WLAN object on every API call since the servers and the MicroPtyhon
+    // task have the same priority
+    wlan_reenable(wlan_obj.mode);
+}
+
 //*****************************************************************************
 // DEFINE STATIC FUNCTIONS
 //*****************************************************************************
@@ -554,8 +562,8 @@ void wlan_set_current_time (uint32_t seconds_since_2000) {
 STATIC void wlan_clear_data (void) {
     CLR_STATUS_BIT_ALL(wlan_obj.status);
     wlan_obj.ip = 0;
-    memset(wlan_obj.ssid_o, 0, sizeof(wlan_obj.ssid));
-    memset(wlan_obj.bssid, 0, sizeof(wlan_obj.bssid));
+//    memset(wlan_obj.ssid_o, 0, sizeof(wlan_obj.ssid));
+//    memset(wlan_obj.bssid, 0, sizeof(wlan_obj.bssid));
 }
 
 STATIC void wlan_reenable (SlWlanMode_t mode) {
@@ -1241,6 +1249,31 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_KW(wlan_irq_obj, 1, wlan_irq);
 //}
 //STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(wlan_urn_obj, 1, 2, wlan_urn);
 
+
+STATIC mp_obj_t wlan_smartconfig (mp_uint_t n_args, const mp_obj_t *args) {
+    wlan_obj_t *self = args[0];
+    if (n_args == 1) {
+        return mp_obj_new_bool(self->smartconfig);
+    } else {
+        if (mp_obj_is_true(args[1])) {
+            // remove all profiles
+            ASSERT_ON_ERROR(sl_WlanProfileDel(0xFF));
+            // set connection policy to Auto + SmartConfig
+            ASSERT_ON_ERROR(sl_WlanPolicySet(SL_POLICY_CONNECTION, SL_CONNECTION_POLICY(1, 0, 0, 0, 1), NULL, 0));
+            // start smartconfig
+            ASSERT_ON_ERROR(sl_WlanSmartConfigStart(0, SMART_CONFIG_CIPHER_NONE, 0, 0, 0, NULL, NULL, NULL));
+            self->smartconfig = true;
+        } else {
+            sl_WlanSmartConfigStop();
+            ASSERT_ON_ERROR(sl_WlanPolicySet(SL_POLICY_CONNECTION, SL_CONNECTION_POLICY(1, 1, 0, 0, 0), NULL, 0));
+            self->smartconfig = false;
+        }
+        return mp_const_none;
+    }
+}
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(wlan_smartconfig_obj, 1, 2, wlan_smartconfig);
+
+
 STATIC const mp_map_elem_t wlan_locals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_init),                (mp_obj_t)&wlan_init_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_scan),                (mp_obj_t)&wlan_scan_obj },
@@ -1255,6 +1288,7 @@ STATIC const mp_map_elem_t wlan_locals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_antenna),             (mp_obj_t)&wlan_antenna_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_mac),                 (mp_obj_t)&wlan_mac_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_irq),                 (mp_obj_t)&wlan_irq_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_smartconfig),         (mp_obj_t)&wlan_smartconfig_obj },
     // { MP_OBJ_NEW_QSTR(MP_QSTR_connections),         (mp_obj_t)&wlan_connections_obj },
     // { MP_OBJ_NEW_QSTR(MP_QSTR_urn),                 (mp_obj_t)&wlan_urn_obj },
 
