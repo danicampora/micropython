@@ -1,0 +1,15 @@
+{
+    "deploy": [
+        "../deploy.md"
+    ],
+    "docs": "",
+    "features": [],
+    "images": [
+        "nRF59160-DK-prod-page.jpg"
+    ],
+    "mcu": "nrf91",
+    "product": "pca10153",
+    "thumbnail": "",
+    "url": "https://www.nordicsemi.com/Products/Development-hardware/nRF9161-DK",
+    "vendor": "Nordic Semiconductor"
+}
