@@ -64,7 +64,7 @@ FROZEN_MANIFEST ?= modules/manifest.py
 include ../../py/py.mk
 include ../../extmod/extmod.mk
 
-GIT_SUBMODULES += lib/nrfx lib/tinyusb
+GIT_SUBMODULES += lib/nrfx lib/tinyusb lib/sdk-nrf lib/sdk-nrfxlib
 
 MICROPY_VFS_FAT ?= 0
 
