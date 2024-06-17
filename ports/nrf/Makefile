@@ -78,6 +78,7 @@ INC += -I./modules/machine
 INC += -I./modules/ubluepy
 INC += -I./modules/music
 INC += -I./modules/ble
+INC += -I./modules/dect
 INC += -I./modules/board
 INC += -I./modules/nrf
 INC += -I../../shared/readline
@@ -286,6 +287,7 @@ DRIVERS_SRC_C += $(addprefix modules/,\
 	ble/modble.c \
 	nrf/modnrf.c \
 	nrf/flashbdev.c \
+	dect/dect.c \
 	)
 
 # Custom micropython startup file with smaller interrupt vector table
