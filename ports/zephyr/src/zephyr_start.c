@@ -29,7 +29,7 @@
 
 int real_main(void);
 
-void main(void) {
+int main(void) {
     #ifdef CONFIG_CONSOLE_SUBSYS
     console_init();
     #else
