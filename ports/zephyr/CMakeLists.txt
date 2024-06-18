@@ -47,6 +47,7 @@ set(MICROPY_SOURCE_PORT
     mphalport.c
     uart_core.c
     zephyr_storage.c
+    moddect.c
 )
 list(TRANSFORM MICROPY_SOURCE_PORT PREPEND ${MICROPY_PORT_DIR}/)
 
@@ -79,6 +80,11 @@ set(MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_PORT}
 )
 
+set(MICROPY_ZEPHYR_PORT_LIB_INCLUDES
+    sdk-nrfxlib/nrf_modem/include
+)
+list(TRANSFORM MICROPY_ZEPHYR_PORT_LIB_INCLUDES PREPEND ${MICROPY_DIR}/lib/)
+
 zephyr_get_include_directories_for_lang(C includes)
 zephyr_get_system_include_directories_for_lang(C system_includes)
 zephyr_get_compile_definitions_for_lang(C definitions)
@@ -92,6 +98,7 @@ zephyr_library_include_directories(
     ${MICROPY_INC_CORE}
     ${MICROPY_PORT_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${MICROPY_ZEPHYR_PORT_LIB_INCLUDES}
 )
 
 zephyr_library_compile_options(
