@@ -168,3 +168,35 @@ run the following after you built an image with the previous command:
 
     $ west build -t run
 
+
+Build using the Nordic nRF Connect SDK
+--------------------------------------
+
+First install the SDK using the following instructions:
+
+https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/installation/install_ncs.html
+
+The nRF Connect SDK (ncs) will be installed in /$HOME/ncs
+
+From now on, all commands assume that you have nagivated to the `ncs` directory and all commands are run from there.
+
+Make sure to run:
+
+    $ west update
+
+And:
+
+    $ west zephyr-export
+
+Then setup the command line environment by running:
+
+    $ source zephyr/zephyr-env.sh
+
+
+To build for the nrf9161dk
+
+    $ west build -b nrf9161dk ~/Code/Remote-Tech/nRFBoards/micropython/ports/zephyr --pristine
+
+Then flash like this:
+
+    $ west flash
