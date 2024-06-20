@@ -72,12 +72,18 @@ set(MICROPY_SOURCE_LIB
 )
 list(TRANSFORM MICROPY_SOURCE_LIB PREPEND ${MICROPY_DIR}/lib/)
 
+set(MICROPY_SOURCE_NRFX_LIB
+    drivers/src/nrfx_ipc.c
+)
+list(TRANSFORM MICROPY_SOURCE_NRFX_LIB PREPEND ${MICROPY_DIR}/lib/nrfx/)
+
 set(MICROPY_SOURCE_QSTR
     ${MICROPY_SOURCE_PY}
     ${MICROPY_SOURCE_EXTMOD}
     ${MICROPY_SOURCE_SHARED}
     ${MICROPY_SOURCE_LIB}
     ${MICROPY_SOURCE_PORT}
+    ${MICROPY_SOURCE_NRFX_LIB}
 )
 
 set(MICROPY_ZEPHYR_PORT_LIB_INCLUDES
@@ -113,6 +119,7 @@ zephyr_library_compile_definitions(
     MICROPY_VFS_FAT=$<BOOL:${CONFIG_MICROPY_VFS_FAT}>
     MICROPY_VFS_LFS1=$<BOOL:${CONFIG_MICROPY_VFS_LFS1}>
     MICROPY_VFS_LFS2=$<BOOL:${CONFIG_MICROPY_VFS_LFS2}>
+    NRFX_IPC_ENABLED=1
 )
 
 zephyr_library_sources(${MICROPY_SOURCE_QSTR})
@@ -126,4 +133,4 @@ target_sources(app PRIVATE
     src/zephyr_getchar.c
 )
 
-target_link_libraries(app PRIVATE ${MICROPY_TARGET})
+target_link_libraries(app PRIVATE ${MICROPY_TARGET} ${MICROPY_DIR}/lib/sdk-nrfxlib/nrf_modem/lib/dect_phy/nrf9120/hard-float/libmodem.a)
