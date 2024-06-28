@@ -25,6 +25,8 @@ _ADV_TYPE_APPEARANCE = const(0x19)
 
 _ADV_MAX_PAYLOAD = const(31)
 
+_ADV_INTERVAL_US = const(250_000)
+
 
 # Generate a payload to be passed to gap_advertise(adv_data=...).
 def advertising_payload(limited_disc=False, br_edr=False, name=None, services=None, appearance=0):
@@ -91,11 +93,17 @@ def decode_services(payload):
 def demo():
     payload = advertising_payload(
         name="micropython",
-        services=[bluetooth.UUID(0x181A), bluetooth.UUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E")],
+        services=[
+            bluetooth.UUID(0x181A),
+        ],
     )
     print(payload)
     print(decode_name(payload))
     print(decode_services(payload))
+
+    ble = bluetooth.BLE()
+    ble.active(True)
+    ble.gap_advertise(_ADV_INTERVAL_US, adv_data=payload, connectable=True)
 
 
 if __name__ == "__main__":
