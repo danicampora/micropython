@@ -31,11 +31,11 @@
 
 #if MICROPY_PY_BLUETOOTH
 
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/hci.h>
 #include "extmod/modbluetooth.h"
 
-#define DEBUG_printf(...) // printk("BLE: " __VA_ARGS__)
+#define DEBUG_printf(...) printk("BLE: " __VA_ARGS__)
 
 #define BLE_HCI_SCAN_ITVL_MIN 0x10
 #define BLE_HCI_SCAN_ITVL_MAX 0xffff
@@ -118,6 +118,14 @@ void gap_scan_cb_timeout(struct k_timer *timer_id) {
 }
 #endif
 
+static void mp_bt_connected(struct bt_conn *connected, uint8_t err);
+static void mp_bt_disconnected(struct bt_conn *disconn, uint8_t reason);
+
+static struct bt_conn_cb mp_bt_conn_callbacks = {
+	.connected = mp_bt_connected,
+	.disconnected = mp_bt_disconnected,
+};
+
 int mp_bluetooth_init(void) {
     DEBUG_printf("mp_bluetooth_init\n");
 
@@ -136,6 +144,8 @@ int mp_bluetooth_init(void) {
     bt_le_scan_cb_register(&mp_bluetooth_zephyr_gap_scan_cb_struct);
     #endif
 
+    bt_conn_cb_register(&mp_bt_conn_callbacks);
+
     if (mp_bluetooth_zephyr_ble_state == MP_BLUETOOTH_ZEPHYR_BLE_STATE_OFF) {
         // bt_enable can only be called once.
         int ret = bt_enable(NULL);
@@ -149,6 +159,36 @@ int mp_bluetooth_init(void) {
     DEBUG_printf("mp_bluetooth_init: ready\n");
 
     return 0;
+}
+
+static struct bt_conn *gattc_conn = NULL;
+
+static void mp_bt_connected(struct bt_conn *connected, uint8_t err) {
+
+	if (err) {
+		DEBUG_printf("Connection failed (err %u)", err);
+	} else {
+		DEBUG_printf("Connected");
+		if (!gattc_conn) {
+			gattc_conn = bt_conn_ref(connected);
+		}
+		//if (gattc_connection_handler) {
+		//	gattc_connection_handler(true);
+		//}
+	}
+}
+
+static void mp_bt_disconnected(struct bt_conn *disconn, uint8_t reason) {
+	if (gattc_conn) {
+		bt_conn_unref(gattc_conn);
+		gattc_conn = NULL;
+	}
+
+	//if (gattc_connection_handler) {
+	//	gattc_connection_handler(false);
+	//}
+
+	DEBUG_printf("Disconnected (reason %u)", reason);
 }
 
 void mp_bluetooth_deinit(void) {
