@@ -141,7 +141,6 @@ static void reverse_addr_byte_order(uint8_t *addr_out, const bt_addr_le_t *addr_
 
 #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 void gap_scan_cb_recv(const struct bt_le_scan_recv_info *info, struct net_buf_simple *buf) {
-    DEBUG_printf("gap_scan_cb_recv: adv_type=%d\n", info->adv_type);
 
     if (!mp_bluetooth_is_active()) {
         return;
@@ -154,6 +153,11 @@ void gap_scan_cb_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
     uint8_t addr[6];
     reverse_addr_byte_order(addr, info->addr);
     mp_bluetooth_gap_on_scan_result(info->addr->type, addr, info->adv_type, info->rssi, buf->data, buf->len);
+    DEBUG_printf("gap_scan_cb_recv: rssi=%d\n", info->rssi);
+    for (int i=0; i<buf->len; i++) {
+        printk("%c", buf->data[i]);
+    }
+    printk("\n");
 }
 
 static mp_obj_t gap_scan_stop(mp_obj_t unused) {
