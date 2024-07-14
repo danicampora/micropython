@@ -7,6 +7,10 @@
 void mp_hal_init(void);
 void mp_hal_wait_sem(struct k_sem *sem, uint32_t timeout_ms);
 
+void mp_hal_main_sem_give(void);
+
+void mp_hal_main_sem_take(void);
+
 static inline mp_uint_t mp_hal_ticks_us(void) {
     return k_cyc_to_ns_floor64(k_cycle_get_32()) / 1000;
 }

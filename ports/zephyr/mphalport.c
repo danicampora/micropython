@@ -26,6 +26,7 @@
 
 #include "py/runtime.h"
 #include "py/mphal.h"
+#include <zephyr/zephyr.h>
 
 static struct k_poll_signal wait_signal;
 static struct k_poll_event wait_events[2] = {
@@ -37,12 +38,23 @@ static struct k_poll_event wait_events[2] = {
         NULL, 0),
 };
 
+static struct k_sem mp_main_task_sem;
+
 void mp_hal_init(void) {
     k_poll_signal_init(&wait_signal);
+    k_sem_init(&mp_main_task_sem, 0, K_SEM_MAX_LIMIT);
 }
 
 void mp_hal_signal_event(void) {
     k_poll_signal_raise(&wait_signal, 0);
+}
+
+void mp_hal_main_sem_give(void) {
+    k_sem_give(&mp_main_task_sem);
+}
+
+void mp_hal_main_sem_take(void) {
+    k_sem_take(&mp_main_task_sem, K_NO_WAIT);
 }
 
 void mp_hal_wait_sem(struct k_sem *sem, uint32_t timeout_ms) {
