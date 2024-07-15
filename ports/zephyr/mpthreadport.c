@@ -133,7 +133,6 @@ static void zephyr_entry(void *arg1, void *arg2, void* arg3) {
 }
 
 mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_size, int priority, char *name) {
-    (void)name;
 
     // store thread entry function into a global variable so we can access it
     ext_thread_entry = entry;
@@ -159,6 +158,9 @@ mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_s
             mp_thread_mutex_unlock(&thread_mutex);
             mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("can't create thread"));
         }
+
+        k_thread_name_set(th->id, (const char *)name);
+
     } else {
         mp_thread_mutex_unlock(&thread_mutex);
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("maximum number of threads reached"));
