@@ -34,19 +34,27 @@
 #include "mpthreadport.h"
 
 
-
 #if MICROPY_PY_THREAD
+
+#define DEBUG_printf(...) printk("_thread: " __VA_ARGS__)
 
 #define MP_THREAD_MIN_STACK_SIZE                        (4 * 1024)
 #define MP_THREAD_DEFAULT_STACK_SIZE                    (MP_THREAD_MIN_STACK_SIZE + 1024)
 #define MP_THREAD_PRIORITY                              (k_thread_priority_get(k_current_get()))    // same priority as the main thread
 #define MP_THREAD_MAXIMUM_USER_THREADS                  (4)
 
+typedef enum {
+    MP_THREAD_STATUS_CREATED = 0,
+    MP_THREAD_STATUS_READY,
+    MP_THREAD_STATUS_FINISHED,
+} mp_thread_status_t;
+
 // this structure forms a linked list, one node per active thread
 typedef struct _mp_thread_t {
-    k_tid_t id;                 // system id of thread
+    k_tid_t id;                 // system id of thread (this is actually a pointer to z_thread below)
     struct k_thread z_thread;   // the zephyr thread object
-    int ready;                  // whether the thread is ready and running
+    mp_thread_status_t status;  // whether the thread is created, ready, or finished
+    int alive;                  // whether the thread is still visible by the kernel
     void *arg;                  // thread Python args, a GC root pointer
     void *stack;                // pointer to the stack
     size_t stack_len;           // number of words in the stack
@@ -62,15 +70,20 @@ static uint32_t mp_thread_counter;
 K_THREAD_STACK_ARRAY_DEFINE(mp_thread_stack_array, MP_THREAD_MAXIMUM_USER_THREADS, MP_THREAD_DEFAULT_STACK_SIZE);
 
 
+static void mp_thread_iterate_threads_cb (const struct k_thread *thread, void *user_data);
+
+
 void mp_thread_init(void *stack, uint32_t stack_len) {
     mp_thread_set_state(&mp_state_ctx.thread);
     // create the first entry in the linked list of all threads
     thread_entry0.id = k_current_get();
-    thread_entry0.ready = 1;
+    thread_entry0.status = MP_THREAD_STATUS_READY;
+    thread_entry0.alive = 1;
     thread_entry0.arg = NULL;
     thread_entry0.stack = stack;
     thread_entry0.stack_len = stack_len;
     thread_entry0.next = NULL;
+    k_thread_name_set(thread_entry0.id, "mp_main");
     mp_thread_counter = 0;
     mp_thread_mutex_init(&thread_mutex);
 
@@ -81,14 +94,35 @@ void mp_thread_init(void *stack, uint32_t stack_len) {
 }
 
 void mp_thread_gc_others(void) {
+
     mp_thread_mutex_lock(&thread_mutex, 1);
+    // get the kernel to iterate over all the existing threads
+    k_thread_foreach(mp_thread_iterate_threads_cb, NULL);
+    // unlink non-alive thread nodes from the list
+    mp_thread_t *prev = NULL;
+    for (mp_thread_t *th = thread; th != NULL; th = th->next) {
+        if ((th->status == MP_THREAD_STATUS_FINISHED) && !th->alive) {
+            if (prev != NULL) {
+                prev->next = th->next;
+            } else {
+                // move the start pointer
+                thread = th->next;
+            }
+            mp_thread_counter--;
+            DEBUG_printf("Collecting thread %s\n", k_thread_name_get(th->id));
+            // The "th" memory will eventually be reclaimed by the GC
+        } else {
+            th->alive = 0;
+        }
+    }
+
     for (mp_thread_t *th = thread; th != NULL; th = th->next) {
         gc_collect_root((void **)&th, 1);
         gc_collect_root(&th->arg, 1); // probably not needed
         if (th->id == k_current_get()) {
             continue;
         }
-        if (!th->ready) {
+        if (th->status != MP_THREAD_STATUS_READY) {
             continue;
         }
         gc_collect_root(th->stack, th->stack_len);
@@ -112,7 +146,7 @@ void mp_thread_start(void) {
     mp_thread_mutex_lock(&thread_mutex, 1);
     for (mp_thread_t *th = thread; th != NULL; th = th->next) {
         if (th->id == k_current_get()) {
-            th->ready = 1;
+            th->status = MP_THREAD_STATUS_READY;
             break;
         }
     }
@@ -167,7 +201,8 @@ mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_s
     }
 
     // add thread to linked list of all threads
-    th->ready = 0;
+    th->status = MP_THREAD_STATUS_CREATED;
+    th->alive = 0;
     th->arg = arg;
     th->stack = mp_thread_stack_array[mp_thread_counter];
     th->stack_len = MP_THREAD_DEFAULT_STACK_SIZE / sizeof(uintptr_t);
@@ -185,47 +220,20 @@ mp_uint_t mp_thread_create_ex(void *(*entry)(void *), void *arg, size_t *stack_s
 }
 
 mp_uint_t mp_thread_create(void *(*entry)(void *), void *arg, size_t *stack_size) {
-    return mp_thread_create_ex(entry, arg, stack_size, MP_THREAD_PRIORITY, "mp_thread");
+    char _name[16];
+    snprintf(_name, sizeof(_name), "mp_thread_%d", mp_thread_counter);
+    return mp_thread_create_ex(entry, arg, stack_size, MP_THREAD_PRIORITY, _name);
 }
 
 void mp_thread_finish(void) {
     mp_thread_mutex_lock(&thread_mutex, 1);
     for (mp_thread_t *th = thread; th != NULL; th = th->next) {
         if (th->id == k_current_get()) {
-            th->ready = 0;
+            th->status = MP_THREAD_STATUS_FINISHED;
             break;
         }
     }
     mp_thread_mutex_unlock(&thread_mutex);
-}
-
-// // This is called from the FreeRTOS idle task and is not within Python context,
-// // so MP_STATE_THREAD is not valid and it does not have the GIL.
-// void FREERTOS_TASK_DELETE_HOOK(void *tcb) {
-//     if (thread == NULL) {
-//         // threading not yet initialised
-//         return;
-//     }
-//     mp_thread_t *prev = NULL;
-//     mp_thread_mutex_lock(&thread_mutex, 1);
-//     for (mp_thread_t *th = thread; th != NULL; prev = th, th = th->next) {
-//         // unlink the node from the list
-//         if ((void *)th->id == tcb) {
-//             if (prev != NULL) {
-//                 prev->next = th->next;
-//             } else {
-//                 // move the start pointer
-//                 thread = th->next;
-//             }
-//             // The "th" memory will eventually be reclaimed by the GC.
-//             break;
-//         }
-//     }
-//     mp_thread_mutex_unlock(&thread_mutex);
-// }
-
-void mp_thread_iterate_threads_cb (const struct k_thread *thread, void *user_data) {
-
 }
 
 void mp_thread_mutex_init(mp_thread_mutex_t *mutex) {
@@ -244,24 +252,25 @@ void mp_thread_mutex_unlock(mp_thread_mutex_t *mutex) {
 }
 
 void mp_thread_deinit(void) {
-    for (;;) {
-        // Find a task to delete
-        k_tid_t id = NULL;
-        mp_thread_mutex_lock(&thread_mutex, 1);
-        for (mp_thread_t *th = thread; th != NULL; th = th->next) {
-            // Don't delete the current task
-            if (th->id != k_current_get()) {
-                id = th->id;
-                break;
-            }
+    // abort all threads except for the main thread
+    mp_thread_mutex_lock(&thread_mutex, 1);
+    for (mp_thread_t *th = thread; th != NULL; th = th->next) {
+        // don't delete the current task
+        if (th->id != k_current_get()) {
+            th->status = MP_THREAD_STATUS_FINISHED;
+            DEBUG_printf("Ending thread %s\n", k_thread_name_get(th->id));
+            k_thread_abort(th->id);
         }
-        mp_thread_mutex_unlock(&thread_mutex);
+    }
+    mp_thread_mutex_unlock(&thread_mutex);
+}
 
-        if (id == NULL) {
-            // No tasks left to delete
-            break;
-        } else {
-            k_thread_abort(id);
+static void mp_thread_iterate_threads_cb (const struct k_thread *z_thread, void *user_data) {
+    DEBUG_printf("Iterating...\n");
+    for (mp_thread_t *th = thread; th != NULL; th = th->next) {
+        if (th->id == (struct k_thread *)z_thread) {
+            th->alive = 1;
+            DEBUG_printf("Found thread %s\n", k_thread_name_get(th->id));
         }
     }
 }

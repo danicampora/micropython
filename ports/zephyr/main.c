@@ -184,6 +184,7 @@ soft_reset:
     #endif
 
     gc_sweep_all();
+    gc_collect();
 
     goto soft_reset;
 
