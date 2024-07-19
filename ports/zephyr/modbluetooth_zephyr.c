@@ -39,7 +39,7 @@
 #include <zephyr/bluetooth/gatt.h>
 #include "extmod/modbluetooth.h"
 
-#define DEBUG_printf(...) printk("BLE: " __VA_ARGS__)
+#define DEBUG_printf(...)   // printk("BLE: " __VA_ARGS__)
 
 #define BLE_HCI_SCAN_ITVL_MIN 0x10
 #define BLE_HCI_SCAN_ITVL_MAX 0xffff
@@ -73,16 +73,15 @@ static struct k_timer mp_bluetooth_zephyr_gap_scan_timer;
 static struct bt_le_scan_cb mp_bluetooth_zephyr_gap_scan_cb_struct;
 #endif
 
-// TODO: need to enable threading in order to have support for sync events
-// static void mp_bt_zephyr_connected(struct bt_conn *connected, uint8_t err);
-// static void mp_bt_zephyr_disconnected(struct bt_conn *disconn, uint8_t reason);
+static void mp_bt_zephyr_connected(struct bt_conn *connected, uint8_t err);
+static void mp_bt_zephyr_disconnected(struct bt_conn *disconn, uint8_t reason);
 
-// static struct bt_conn_cb mp_bt_zephyr_conn_callbacks = {
-//     .connected = mp_bt_zephyr_connected,
-//     .disconnected = mp_bt_zephyr_disconnected,
-// };
+static struct bt_conn_cb mp_bt_zephyr_conn_callbacks = {
+    .connected = mp_bt_zephyr_connected,
+    .disconnected = mp_bt_zephyr_disconnected,
+};
 
-// static struct bt_conn *gattc_central_conn = NULL;
+static struct bt_conn *gattc_central_conn = NULL;
 
 static struct bt_data bt_ad_data[8];
 static size_t bt_ad_len = 0;
@@ -90,42 +89,33 @@ static struct bt_data bt_sd_data[8];
 static size_t bt_sd_len = 0;
 
 
-// TODO: need to enable threading in order to have support for sync events
-// static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
-//     struct bt_conn_info info;
-//     bt_conn_get_info(conn, &info);
+static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
+    struct bt_conn_info info;
+    bt_conn_get_info(conn, &info);
 
-//     if (err) {
-//         uint8_t addr[6] = {0};
-//         DEBUG_printf("Connection from central failed (err %u)\n", err);
-//         mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, 0xff, addr);
-//     } else {
-//         if (gattc_central_conn == NULL) {
-//             DEBUG_printf("Central connected\n");
-//             gattc_central_conn = bt_conn_ref(conn);
-//             mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
-//         }
-//         //if (gattc_connection_handler) {
-//         //  gattc_connection_handler(true);
-//         //}
-//     }
-// }
+    if (err) {
+        uint8_t addr[6] = {0};
+        DEBUG_printf("Connection from central failed (err %u)\n", err);
+        mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, 0xff, addr);
+    } else {
+        if (gattc_central_conn == NULL) {
+            DEBUG_printf("Central connected\n");
+            gattc_central_conn = bt_conn_ref(conn);
+            mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
+        }
+    }
+}
 
-// TODO: need to enable threading in order to have support for sync events
-// static void mp_bt_zephyr_disconnected(struct bt_conn *conn, uint8_t reason) {
-//     if (gattc_central_conn != NULL) {
-//         DEBUG_printf("Central disconnected (reason %u)\n", reason);
-//         struct bt_conn_info info;
-//         bt_conn_get_info(conn, &info);
-//         bt_conn_unref(gattc_central_conn);
-//         gattc_central_conn = NULL;
-//         mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
-//     }
-
-//     //if (gattc_connection_handler) {
-//     //  gattc_connection_handler(false);
-//     //}
-// }
+static void mp_bt_zephyr_disconnected(struct bt_conn *conn, uint8_t reason) {
+    if (gattc_central_conn != NULL) {
+        DEBUG_printf("Central disconnected (reason %u)\n", reason);
+        struct bt_conn_info info;
+        bt_conn_get_info(conn, &info);
+        bt_conn_unref(gattc_central_conn);
+        gattc_central_conn = NULL;
+        mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
+    }
+}
 
 static int bt_err_to_errno(int err) {
     // Zephyr uses errno codes directly, but they are negative.
@@ -198,8 +188,7 @@ int mp_bluetooth_init(void) {
     bt_le_scan_cb_register(&mp_bluetooth_zephyr_gap_scan_cb_struct);
     #endif
 
-    // TODO: need to enable threading in order to have support for sync events
-    // bt_conn_cb_register(&mp_bt_zephyr_conn_callbacks);
+    bt_conn_cb_register(&mp_bt_zephyr_conn_callbacks);
 
     if (mp_bluetooth_zephyr_ble_state == MP_BLUETOOTH_ZEPHYR_BLE_STATE_OFF) {
         // bt_enable can only be called once.
