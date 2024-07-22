@@ -81,12 +81,28 @@ static struct bt_conn_cb mp_bt_zephyr_conn_callbacks = {
     .disconnected = mp_bt_zephyr_disconnected,
 };
 
-static struct bt_conn *gattc_central_conn = NULL;
+static struct bt_conn *gattc_central_conn;
 
 static struct bt_data bt_ad_data[8];
 static size_t bt_ad_len = 0;
 static struct bt_data bt_sd_data[8];
 static size_t bt_sd_len = 0;
+
+
+typedef struct _mp_bt_zephyr_indication_t {
+    struct bt_gatt_indicate_params params;
+    struct _mp_bt_zephyr_indication_t *next;
+} mp_bt_zephyr_indication_t;
+
+static mp_bt_zephyr_indication_t *mp_bt_zephyr_indications;
+
+typedef struct _mp_bt_zephyr_conn_t {
+    struct bt_conn *conn;
+    struct mp_bt_zephyr_indication_t *ind;
+    struct _mp_bt_zephyr_conn_t *next;
+} mp_bt_zephyr_conn_t;
+
+mp_bt_zephyr_conn_t mp_bt_zephyr_conn;
 
 
 static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
@@ -102,6 +118,8 @@ static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
             DEBUG_printf("Central connected\n");
             gattc_central_conn = bt_conn_ref(conn);
             mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
+        } else {
+            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
         }
     }
 }
@@ -175,6 +193,8 @@ int mp_bluetooth_init(void) {
 
     // Clean up if necessary.
     mp_bluetooth_deinit();
+
+    gattc_central_conn = NULL;
 
     // Allocate memory for state.
     MP_STATE_PORT(bluetooth_zephyr_root_pointers) = m_new0(mp_bluetooth_zephyr_root_pointers_t, 1);
@@ -348,6 +368,7 @@ int mp_bluetooth_gap_disconnect(uint16_t conn_handle) {
     if (!mp_bluetooth_is_active()) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
+    bt_conn_disconnect(gattc_central_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
     return MP_EOPNOTSUPP;
 }
 
@@ -368,18 +389,59 @@ int mp_bluetooth_gatts_write(uint16_t value_handle, const uint8_t *value, size_t
     return mp_bluetooth_gatts_db_write(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, value_handle, value, value_len);
 }
 
+static void mp_bt_zephyr_gatt_indicate_func(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err) {
+
+}
+
+void mp_bt_zephyr_gatt_indicate_params_destroy(struct bt_gatt_indicate_params *params) {
+    mp_bt_zephyr_indication_t *_prev = NULL;
+    for (mp_thread_t *_ind = mp_bt_zephyr_indications; _ind != NULL; prev = _ind, _ind = _ind->next) {
+        if (&_ind->params = params) {
+            if (prev != NULL) {
+                prev->next = _ind->next;
+            } else {
+                // move the start pointer
+                _ind = _ind->next;
+            }
+            break;
+        }
+    }
+    m_free(params);
+}
+
 int mp_bluetooth_gatts_notify_indicate(uint16_t conn_handle, uint16_t value_handle, int gatts_op, const uint8_t *value, size_t value_len) {
     if (!mp_bluetooth_is_active()) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
-    return MP_EOPNOTSUPP;
+    
+    switch (gatts_op) {
+        case MP_BLUETOOTH_GATTS_OP_NOTIFY: {
+            bt_gatt_notify(gattc_central_conn, const struct bt_gatt_attr *attr, value, value_len);
+            break;
+        }
+        case MP_BLUETOOTH_GATTS_OP_INDICATE: {
+            struct bt_gatt_indicate_params params = {
+                .uuid = NULL,
+                .attr =  // TODO: find the characteristic using the value_handle,
+                .func = mp_bt_zephyr_gatt_indicate_func,
+                .destroy = mp_bt_zephyr_gatt_indicate_params_destroy,
+                .data = value,
+                .len = value_len,
+                .chan_opt = BT_ATT_CHAN_OPT_NONE
+            };
+            bt_gatt_indicate(gattc_central_conn, &params);
+            break;
+        }
+    }
 }
+
+// mp_bluetooth_gatts_on_indicate_complete(event->notify_tx.conn_handle, event->notify_tx.attr_handle, event->notify_tx.status == BLE_HS_EDONE ? 0 : event->notify_tx.status);
 
 int mp_bluetooth_gatts_set_buffer(uint16_t value_handle, size_t len, bool append) {
     if (!mp_bluetooth_is_active()) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
-    return MP_EOPNOTSUPP;
+    return mp_bluetooth_gatts_db_resize(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, value_handle, len, append);
 }
 
 int mp_bluetooth_get_preferred_mtu(void) {

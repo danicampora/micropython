@@ -101,7 +101,7 @@ void mp_thread_gc_others(void) {
     k_thread_foreach(mp_thread_iterate_threads_cb, NULL);
     // unlink non-alive thread nodes from the list
     mp_thread_t *prev = NULL;
-    for (mp_thread_t *th = thread; th != NULL; th = th->next) {
+    for (mp_thread_t *th = thread; th != NULL; prev = th, th = th->next) {
         if ((th->status == MP_THREAD_STATUS_FINISHED) && !th->alive) {
             if (prev != NULL) {
                 prev->next = th->next;
