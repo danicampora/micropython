@@ -396,7 +396,7 @@ static void mp_bt_zephyr_gatt_indicate_func(struct bt_conn *conn, struct bt_gatt
 void mp_bt_zephyr_gatt_indicate_params_destroy(struct bt_gatt_indicate_params *params) {
     mp_bt_zephyr_indication_t *_prev = NULL;
     for (mp_thread_t *_ind = mp_bt_zephyr_indications; _ind != NULL; prev = _ind, _ind = _ind->next) {
-        if (&_ind->params = params) {
+        if (&_ind->params == params) {
             if (prev != NULL) {
                 prev->next = _ind->next;
             } else {
