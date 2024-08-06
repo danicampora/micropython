@@ -685,11 +685,11 @@ int mp_bluetooth_gap_peripheral_connect_cancel(void) {
 static struct bt_uuid *create_zephyr_uuid(const mp_obj_bluetooth_uuid_t *uuid) {
     struct bt_uuid *result = (struct bt_uuid *)m_new(union uuid_u, 1);
     if (uuid->type == MP_BLUETOOTH_UUID_TYPE_16) {
-        bt_uuid_create(result, uuid->data, BT_UUID_SIZE_16);
+        bt_uuid_create(result, uuid->data, 2);
     } else if (uuid->type == MP_BLUETOOTH_UUID_TYPE_32) {
-        bt_uuid_create(result, uuid->data, BT_UUID_TYPE_32);
+        bt_uuid_create(result, uuid->data, 4);
     } else {    //  MP_BLUETOOTH_UUID_TYPE_128
-        bt_uuid_create(result, uuid->data, BT_UUID_TYPE_128);
+        bt_uuid_create(result, uuid->data, 16);
     }
     return result;
 }
