@@ -440,9 +440,6 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
         return MP_E2BIG;
     }
 
-    // bitfield of the handles we should ignore, should be more than enough for most applications
-    uint64_t handles_to_ignore = 0;
-
     // first of all allocate the entire memory for all the attributes that this service is composed of
     // 1 for the service itself, 2 for each characteristic (the declaration and the value), and one for each descriptor
     size_t total_descriptors = 0;
@@ -461,6 +458,8 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
     size_t handle_index = 0;
     size_t descriptor_index = 0;
     size_t attr_index = 0;
+    // bitfield of the handles we should ignore, should be more than enough for most applications
+    uint64_t attrs_to_ignore = 0;
 
     add_service(create_zephyr_uuid(service_uuid), &svc_attributes[attr_index]);
     attr_index += 1;
@@ -487,7 +486,6 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
         }
 
         add_characteristic(&add_char, &svc_attributes[attr_index], &svc_attributes[attr_index + 1]);
-        mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[attr_index + 1].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
 
         struct bt_gatt_attr *curr_char_value = &svc_attributes[attr_index];
         attr_index += 2;
@@ -506,7 +504,6 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
                 }
 
                 add_descriptor(curr_char_value, &add_desc, &svc_attributes[attr_index]);
-                mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[attr_index].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
                 attr_index += 1;
 
                 descriptor_index++;
@@ -524,10 +521,9 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
             add_desc.uuid = create_zephyr_uuid(&ccc_uuid);
             add_desc.permissions = BT_GATT_PERM_READ | BT_GATT_PERM_WRITE;
 
-            handles_to_ignore |= (1 << attr_index);
+            attrs_to_ignore |= (1 << attr_index);
 
             add_descriptor(curr_char_value, &add_desc, &svc_attributes[attr_index]);
-            mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[attr_index].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
             attr_index += 1;
         }
     }
@@ -549,8 +545,13 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
     // we are not interested in the handle of the service itself
     for (int i = 1; i < total_attributes; i++) {
         // store all the relevant handles (characteristics and attributes defined in Python)
-        if (!((uint64_t)(handles_to_ignore >> i) & (uint64_t)0x01)) {
+        if (!((uint64_t)(attrs_to_ignore >> i) & (uint64_t)0x01)) {
             handles[handle_index++] = svc_attributes[i].handle;
+            mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
+            mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle);
+            if (svc_attributes[i].user_data == NULL) {
+                svc_attributes[i].user_data = entry->data;
+            }
         }
     }
 
