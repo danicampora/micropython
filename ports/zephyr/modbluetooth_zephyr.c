@@ -548,10 +548,7 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
         if (!((uint64_t)(attrs_to_ignore >> i) & (uint64_t)0x01)) {
             handles[handle_index++] = svc_attributes[i].handle;
             mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
-            mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle);
-            if (svc_attributes[i].user_data == NULL) {
-                svc_attributes[i].user_data = entry->data;
-            }
+            // mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle);
         }
     }
 
@@ -802,8 +799,6 @@ static void gatt_db_add(const struct bt_gatt_attr *pattern, struct bt_gatt_attr 
     if (user_data_len) {
         attr->user_data = m_new(uint8_t, user_data_len);
         memcpy(attr->user_data, pattern->user_data, user_data_len);
-    } else {
-        attr->user_data = NULL;
     }
 }
 
