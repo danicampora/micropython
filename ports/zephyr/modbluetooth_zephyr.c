@@ -669,33 +669,25 @@ int mp_bluetooth_gatts_notify_indicate(uint16_t conn_handle, uint16_t value_hand
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
 
+    struct bt_gatt_attr *attr_val = mp_bt_zephyr_find_attr_by_handle(value_handle + 1);
     int err = 0;
 
-    // retrieve the CCC from this characteristic so we can check if the central is actually subscribed to the characteristic in question
-    struct bt_gatt_attr *attr = mp_bt_zephyr_find_attr_by_handle(value_handle);
-    struct bt_gatt_attr *attr_val = mp_bt_zephyr_find_attr_by_handle(value_handle + 1);
-    struct bt_gatt_attr *attr_ccc = mp_bt_zephyr_find_attr_by_handle(value_handle + 2);
-
-    if (attr && attr_val && attr_ccc) {
+    if (attr_val) {
         switch (gatts_op) {
             case MP_BLUETOOTH_GATTS_OP_NOTIFY: {
-                if (((uint16_t *)attr_ccc->user_data)[0] & BT_GATT_CCC_NOTIFY) {
-                    err = bt_gatt_notify(gattc_central_conn, attr_val, value, value_len);
-                }
+                err = bt_gatt_notify(gattc_central_conn, attr_val, value, value_len);
                 break;
             }
             case MP_BLUETOOTH_GATTS_OP_INDICATE: {
-                if (((uint16_t *)attr_ccc->user_data)[0] & (BT_GATT_CCC_INDICATE | BT_GATT_CCC_NOTIFY)) {
-                    struct bt_gatt_indicate_params params = {
-                        .uuid = NULL,
-                        .attr = attr_val,
-                        .func = mp_bt_zephyr_gatt_indicate_done,
-                        .destroy = NULL,
-                        .data = value,
-                        .len = value_len
-                    };
-                    err = bt_gatt_indicate(gattc_central_conn, &params);
-                }
+                struct bt_gatt_indicate_params params = {
+                    .uuid = NULL,
+                    .attr = attr_val,
+                    .func = mp_bt_zephyr_gatt_indicate_done,
+                    .destroy = NULL,
+                    .data = value,
+                    .len = value_len
+                };
+                err = bt_gatt_indicate(gattc_central_conn, &params);
                 break;
             }
         }
@@ -862,9 +854,7 @@ static void add_characteristic(struct add_characteristic *ch, struct bt_gatt_att
 }
 
 static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
-    if (attr->user_data) {
-        memcpy(attr->user_data, &value, sizeof(value));
-    }
+    // TODO
 }
 
 static struct bt_gatt_attr ccc_definition = BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE);
