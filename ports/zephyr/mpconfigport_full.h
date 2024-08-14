@@ -101,6 +101,8 @@
 #define MICROPY_ENABLE_SCHEDULER    (1)
 #define MICROPY_VFS                 (1)
 #define MICROPY_READER_VFS          (MICROPY_VFS)
+#define MICROPY_PY_RANDOM                   (1)
+#define MICROPY_PY_RANDOM_EXTRA_FUNCS       (1)
 
 // fatfs configuration used in ffconf.h
 #define MICROPY_FATFS_ENABLE_LFN       (1)

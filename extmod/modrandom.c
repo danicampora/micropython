@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include "py/mpconfig.h"
 #include "py/runtime.h"
 
 #if MICROPY_PY_RANDOM
