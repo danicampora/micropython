@@ -39,7 +39,7 @@
 #include <zephyr/bluetooth/gatt.h>
 #include "extmod/modbluetooth.h"
 
-#define DEBUG_printf(...)   printk("BLE: " __VA_ARGS__)
+#define DEBUG_printf(...)   // printk("BLE: " __VA_ARGS__)
 
 #define BLE_HCI_SCAN_ITVL_MIN 0x10
 #define BLE_HCI_SCAN_ITVL_MAX 0xffff
@@ -114,14 +114,8 @@ enum {
     GATT_VALUE_WRITE_AUTHOR_FLAG,
 };
 
-typedef struct _mp_bt_zephyr_indication_t {
-    struct bt_gatt_indicate_params params;
-    struct _mp_bt_zephyr_indication_t *next;
-} mp_bt_zephyr_indication_t;
-
 typedef struct _mp_bt_zephyr_conn_t {
     struct bt_conn *conn;
-    struct mp_bt_zephyr_indication_t *ind;
     struct _mp_bt_zephyr_conn_t *next;
 } mp_bt_zephyr_conn_t;
 
@@ -133,6 +127,9 @@ typedef struct _mp_bluetooth_zephyr_root_pointers_t {
     size_t n_services;
     struct bt_gatt_service *services[MP_BLUETOOTH_ZEPHYR_MAX_SERVICES];
 
+    // active connections
+    mp_bt_zephyr_conn_t *connections;
+
 } mp_bluetooth_zephyr_root_pointers_t;
 
 static int mp_bluetooth_zephyr_ble_state;
@@ -143,6 +140,9 @@ static struct k_timer mp_bluetooth_zephyr_gap_scan_timer;
 static struct bt_le_scan_cb mp_bluetooth_zephyr_gap_scan_cb_struct;
 #endif
 
+static mp_bt_zephyr_conn_t *mp_bt_zephyr_find_connection(uint8_t id);
+static void mp_bt_zephyr_insert_connection(mp_bt_zephyr_conn_t *connection);
+static void mp_bt_zephyr_remove_connection(uint8_t id);
 static void mp_bt_zephyr_connected(struct bt_conn *connected, uint8_t err);
 static void mp_bt_zephyr_disconnected(struct bt_conn *disconn, uint8_t reason);
 static struct bt_uuid *create_zephyr_uuid(const mp_obj_bluetooth_uuid_t *uuid);
@@ -162,15 +162,54 @@ static struct bt_conn_cb mp_bt_zephyr_conn_callbacks = {
     .disconnected = mp_bt_zephyr_disconnected,
 };
 
-static struct bt_conn *gattc_central_conn;
-
 static struct bt_data bt_ad_data[8];
 static size_t bt_ad_len = 0;
 static struct bt_data bt_sd_data[8];
 static size_t bt_sd_len = 0;
 
 mp_bt_zephyr_conn_t mp_bt_zephyr_conn;
+mp_bt_zephyr_conn_t *zephyr_next_connection;
 
+
+static mp_bt_zephyr_conn_t *mp_bt_zephyr_find_connection(uint8_t id) {
+    struct bt_conn_info info;
+    for (mp_bt_zephyr_conn_t *connection = MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections; connection != NULL; connection = connection->next) {
+        if (connection->conn) {
+            bt_conn_get_info(connection->conn, &info);
+            if (info.id == id) {
+                return connection;
+            }
+        }
+    }
+    return NULL;
+}
+
+static void mp_bt_zephyr_insert_connection(mp_bt_zephyr_conn_t *connection) {
+    connection->next = MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections;
+    MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections = connection;
+}
+
+static void mp_bt_zephyr_remove_connection(uint8_t id) {
+    struct bt_conn_info info;
+    mp_bt_zephyr_conn_t *prev = NULL;
+    for (mp_bt_zephyr_conn_t *connection = MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections; connection != NULL; connection = connection->next) {
+        if (connection->conn) {
+            bt_conn_get_info(connection->conn, &info);
+            if (info.id == id) {
+                // unlink this item and the gc will eventually collect it
+                if (prev != NULL) {
+                    prev->next = connection->next;
+                } else {
+                    // move the start pointer
+                    MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections = connection->next;
+                }
+                break;
+            } else {
+                prev = connection;
+            }
+        }
+    }
+}
 
 static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
     struct bt_conn_info info;
@@ -181,25 +220,20 @@ static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
         DEBUG_printf("Connection from central failed (err %u)\n", err);
         mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, 0xff, addr);
     } else {
-        if (gattc_central_conn == NULL) {
-            DEBUG_printf("Central connected with id %d\n", info.id);
-            gattc_central_conn = bt_conn_ref(conn);
-            mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
-        } else {
-            bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-        }
+        DEBUG_printf("Central connected with id %d\n", info.id);
+        zephyr_next_connection->conn = bt_conn_ref(conn);
+        mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
+        mp_bt_zephyr_insert_connection(zephyr_next_connection);
     }
 }
 
 static void mp_bt_zephyr_disconnected(struct bt_conn *conn, uint8_t reason) {
-    if (gattc_central_conn != NULL) {
-        struct bt_conn_info info;
-        bt_conn_get_info(conn, &info);
-        DEBUG_printf("Central disconnected (id %d reason %u)\n", info.id, reason);
-        bt_conn_unref(gattc_central_conn);
-        gattc_central_conn = NULL;
-        mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
-    }
+    struct bt_conn_info info;
+    bt_conn_get_info(conn, &info);
+    DEBUG_printf("Central disconnected (id %d reason %u)\n", info.id, reason);
+    bt_conn_unref(conn);
+    mp_bt_zephyr_remove_connection(info.id);
+    mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
 }
 
 static int bt_err_to_errno(int err) {
@@ -261,11 +295,12 @@ int mp_bluetooth_init(void) {
     // Clean up if necessary.
     mp_bluetooth_deinit();
 
-    gattc_central_conn = NULL;
-
     // Allocate memory for state.
     MP_STATE_PORT(bluetooth_zephyr_root_pointers) = m_new0(mp_bluetooth_zephyr_root_pointers_t, 1);
     mp_bluetooth_gatts_db_create(&MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db);
+
+    MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections = NULL;
+    zephyr_next_connection = NULL;
 
     #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
     mp_bluetooth_zephyr_gap_scan_state = MP_BLUETOOTH_ZEPHYR_GAP_SCAN_STATE_INACTIVE;
@@ -332,7 +367,7 @@ void mp_bluetooth_get_current_address(uint8_t *addr_type, uint8_t *addr) {
 }
 
 void mp_bluetooth_set_address_mode(uint8_t addr_mode) {
-    // TODO: implement
+    mp_raise_OSError(MP_EOPNOTSUPP);
 }
 
 size_t mp_bluetooth_gap_get_device_name(const uint8_t **buf) {
@@ -395,6 +430,9 @@ int mp_bluetooth_gap_advertise_start(bool connectable, int32_t interval_us, cons
         .interval_max = interval_us / 625 + 1, // min/max cannot be the same value
         .peer = NULL,
     };
+
+    // pre-allocate a new connection structure as we cannot allocate this inside the connection callback
+    zephyr_next_connection = m_new0(mp_bt_zephyr_conn_t, 1);
 
     return bt_err_to_errno(bt_le_adv_start(&param, bt_ad_data, bt_ad_len, bt_sd_data, bt_sd_len));
 }
@@ -542,7 +580,7 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
 
     int err = bt_gatt_service_register(service);
     if (err) {
-        // TODO: raise and exception with the error code
+        return bt_err_to_errno(err);
     }
 
     // now that the service has been registered, we can assign the handles for the characteristics and the desriptors
@@ -574,8 +612,11 @@ int mp_bluetooth_gap_disconnect(uint16_t conn_handle) {
     if (!mp_bluetooth_is_active()) {
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
-    bt_conn_disconnect(gattc_central_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-    return MP_EOPNOTSUPP;
+    mp_bt_zephyr_conn_t *connection = mp_bt_zephyr_find_connection(conn_handle);
+    if (connection) {
+        return bt_conn_disconnect(connection->conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+    }
+    return MP_ENOENT;
 }
 
 int mp_bluetooth_gatts_read(uint16_t value_handle, const uint8_t **value, size_t *value_len) {
@@ -669,26 +710,30 @@ int mp_bluetooth_gatts_notify_indicate(uint16_t conn_handle, uint16_t value_hand
         return ERRNO_BLUETOOTH_NOT_ACTIVE;
     }
 
-    struct bt_gatt_attr *attr_val = mp_bt_zephyr_find_attr_by_handle(value_handle + 1);
-    int err = 0;
+    int err = MP_ENOENT;
+    mp_bt_zephyr_conn_t *connection = mp_bt_zephyr_find_connection(conn_handle);
 
-    if (attr_val) {
-        switch (gatts_op) {
-            case MP_BLUETOOTH_GATTS_OP_NOTIFY: {
-                err = bt_gatt_notify(gattc_central_conn, attr_val, value, value_len);
-                break;
-            }
-            case MP_BLUETOOTH_GATTS_OP_INDICATE: {
-                struct bt_gatt_indicate_params params = {
-                    .uuid = NULL,
-                    .attr = attr_val,
-                    .func = mp_bt_zephyr_gatt_indicate_done,
-                    .destroy = NULL,
-                    .data = value,
-                    .len = value_len
-                };
-                err = bt_gatt_indicate(gattc_central_conn, &params);
-                break;
+    if (connection) {
+        struct bt_gatt_attr *attr_val = mp_bt_zephyr_find_attr_by_handle(value_handle + 1);
+
+        if (attr_val) {
+            switch (gatts_op) {
+                case MP_BLUETOOTH_GATTS_OP_NOTIFY: {
+                    err = bt_gatt_notify(connection->conn, attr_val, value, value_len);
+                    break;
+                }
+                case MP_BLUETOOTH_GATTS_OP_INDICATE: {
+                    struct bt_gatt_indicate_params params = {
+                        .uuid = NULL,
+                        .attr = attr_val,
+                        .func = mp_bt_zephyr_gatt_indicate_done,
+                        .destroy = NULL,
+                        .data = value,
+                        .len = value_len
+                    };
+                    err = bt_gatt_indicate(connection->conn, &params);
+                    break;
+                }
             }
         }
     }
@@ -864,7 +909,7 @@ static void add_ccc(struct bt_gatt_attr *attr, struct bt_gatt_attr *attr_desc) {
 
     // Check characteristic properties
     if (!(chrc->properties & (BT_GATT_CHRC_NOTIFY | BT_GATT_CHRC_INDICATE))) {
-        return;     // TODO: raise exception
+        mp_raise_OSError(MP_EINVAL);
     }
 
     // Add CCC descriptor to GATT database
@@ -877,7 +922,7 @@ static void add_cep(const struct bt_gatt_attr *attr_chrc, struct bt_gatt_attr *a
 
     // Extended Properties bit shall be set
     if (!(chrc->properties & BT_GATT_CHRC_EXT_PROP)) {
-        return;     // TODO: raise exception
+        mp_raise_OSError(MP_EINVAL);
     }
 
     cep_value.properties = 0x0000;
