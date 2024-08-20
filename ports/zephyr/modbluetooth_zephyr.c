@@ -95,25 +95,6 @@ struct add_descriptor {
     const struct bt_uuid *uuid;
 };
 
-struct ccc_value {
-    struct bt_gatt_attr *attr;
-    struct bt_gatt_attr *ccc;
-    uint8_t value;
-};
-
-struct gatt_value {
-    uint16_t len;
-    uint8_t *data;
-    uint8_t enc_key_size;
-    uint8_t flags[1];
-};
-
-enum {
-    GATT_VALUE_CCC_FLAG,
-    GATT_VALUE_READ_AUTHOR_FLAG,
-    GATT_VALUE_WRITE_AUTHOR_FLAG,
-};
-
 typedef struct _mp_bt_zephyr_conn_t {
     struct bt_conn *conn;
     struct _mp_bt_zephyr_conn_t *next;
@@ -140,6 +121,16 @@ static struct k_timer mp_bluetooth_zephyr_gap_scan_timer;
 static struct bt_le_scan_cb mp_bluetooth_zephyr_gap_scan_cb_struct;
 #endif
 
+static struct bt_gatt_attr ccc_definition = BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE);
+
+static struct bt_data bt_ad_data[8];
+static size_t bt_ad_len = 0;
+static struct bt_data bt_sd_data[8];
+static size_t bt_sd_len = 0;
+
+static mp_bt_zephyr_conn_t mp_bt_zephyr_conn;
+static mp_bt_zephyr_conn_t *mp_bt_zephyr_next_conn;
+
 static mp_bt_zephyr_conn_t *mp_bt_zephyr_find_connection(uint8_t id);
 static void mp_bt_zephyr_insert_connection(mp_bt_zephyr_conn_t *connection);
 static void mp_bt_zephyr_remove_connection(uint8_t id);
@@ -149,27 +140,16 @@ static struct bt_uuid *create_zephyr_uuid(const mp_obj_bluetooth_uuid_t *uuid);
 static void gatt_db_add(const struct bt_gatt_attr *pattern, struct bt_gatt_attr *attr, size_t user_data_len);
 static void add_service(const struct bt_uuid *u, struct bt_gatt_attr *attr);
 static void add_characteristic(struct add_characteristic *ch, struct bt_gatt_attr *attr_chrc, struct bt_gatt_attr *attr_value);
-static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
 static void add_ccc(struct bt_gatt_attr *attr, struct bt_gatt_attr *attr_desc);
 static void add_cep(const struct bt_gatt_attr *attr_chrc, struct bt_gatt_attr *attr_desc);
 static void add_descriptor(struct bt_gatt_attr *chrc, struct add_descriptor *d, struct bt_gatt_attr *attr_desc);
 static void mp_bt_zephyr_gatt_indicate_done(struct bt_conn *conn, struct bt_gatt_indicate_params *params, uint8_t err);
 static struct bt_gatt_attr *mp_bt_zephyr_find_attr_by_handle(uint16_t value_handle);
 
-
 static struct bt_conn_cb mp_bt_zephyr_conn_callbacks = {
     .connected = mp_bt_zephyr_connected,
     .disconnected = mp_bt_zephyr_disconnected,
 };
-
-static struct bt_data bt_ad_data[8];
-static size_t bt_ad_len = 0;
-static struct bt_data bt_sd_data[8];
-static size_t bt_sd_len = 0;
-
-mp_bt_zephyr_conn_t mp_bt_zephyr_conn;
-mp_bt_zephyr_conn_t *zephyr_next_connection;
-
 
 static mp_bt_zephyr_conn_t *mp_bt_zephyr_find_connection(uint8_t id) {
     struct bt_conn_info info;
@@ -221,9 +201,9 @@ static void mp_bt_zephyr_connected(struct bt_conn *conn, uint8_t err) {
         mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_DISCONNECT, info.id, 0xff, addr);
     } else {
         DEBUG_printf("Central connected with id %d\n", info.id);
-        zephyr_next_connection->conn = bt_conn_ref(conn);
+        mp_bt_zephyr_next_conn->conn = bt_conn_ref(conn);
         mp_bluetooth_gap_on_connected_disconnected(MP_BLUETOOTH_IRQ_CENTRAL_CONNECT, info.id, info.le.dst->type, info.le.dst->a.val);
-        mp_bt_zephyr_insert_connection(zephyr_next_connection);
+        mp_bt_zephyr_insert_connection(mp_bt_zephyr_next_conn);
     }
 }
 
@@ -250,7 +230,6 @@ static void reverse_addr_byte_order(uint8_t *addr_out, const bt_addr_le_t *addr_
 
 #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
 void gap_scan_cb_recv(const struct bt_le_scan_recv_info *info, struct net_buf_simple *buf) {
-
     if (!mp_bluetooth_is_active()) {
         return;
     }
@@ -262,11 +241,6 @@ void gap_scan_cb_recv(const struct bt_le_scan_recv_info *info, struct net_buf_si
     uint8_t addr[6];
     reverse_addr_byte_order(addr, info->addr);
     mp_bluetooth_gap_on_scan_result(info->addr->type, addr, info->adv_type, info->rssi, buf->data, buf->len);
-    DEBUG_printf("gap_scan_cb_recv: rssi=%d\n", info->rssi);
-    for (int i=0; i<buf->len; i++) {
-        printk("%c", buf->data[i]);
-    }
-    printk("\n");
 }
 
 static mp_obj_t gap_scan_stop(mp_obj_t unused) {
@@ -300,7 +274,7 @@ int mp_bluetooth_init(void) {
     mp_bluetooth_gatts_db_create(&MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db);
 
     MP_STATE_PORT(bluetooth_zephyr_root_pointers)->connections = NULL;
-    zephyr_next_connection = NULL;
+    mp_bt_zephyr_next_conn = NULL;
 
     #if MICROPY_PY_BLUETOOTH_ENABLE_CENTRAL_MODE
     mp_bluetooth_zephyr_gap_scan_state = MP_BLUETOOTH_ZEPHYR_GAP_SCAN_STATE_INACTIVE;
@@ -432,7 +406,7 @@ int mp_bluetooth_gap_advertise_start(bool connectable, int32_t interval_us, cons
     };
 
     // pre-allocate a new connection structure as we cannot allocate this inside the connection callback
-    zephyr_next_connection = m_new0(mp_bt_zephyr_conn_t, 1);
+    mp_bt_zephyr_next_conn = m_new0(mp_bt_zephyr_conn_t, 1);
 
     return bt_err_to_errno(bt_le_adv_start(&param, bt_ad_data, bt_ad_len, bt_sd_data, bt_sd_len));
 }
@@ -473,7 +447,6 @@ int mp_bluetooth_gatts_register_service_end(void) {
 }
 
 int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, mp_obj_bluetooth_uuid_t **characteristic_uuids, uint16_t *characteristic_flags, mp_obj_bluetooth_uuid_t **descriptor_uuids, uint16_t *descriptor_flags, uint8_t *num_descriptors, uint16_t *handles, size_t num_characteristics) {
-
     if (MP_STATE_PORT(bluetooth_zephyr_root_pointers)->n_services >= MP_BLUETOOTH_ZEPHYR_MAX_SERVICES) {
         return MP_E2BIG;
     }
@@ -588,12 +561,12 @@ int mp_bluetooth_gatts_register_service(mp_obj_bluetooth_uuid_t *service_uuid, m
     for (int i = 1; i < total_attributes; i++) {
         // store all the relevant handles (characteristics and attributes defined in Python)
         if (!((uint64_t)(attrs_to_ignore >> i) & (uint64_t)0x01)) {
-            if (svc_attributes[i].user_data == NULL) {
+            if (svc_attributes[i].user_data == NULL) {  // user defined attributes
                 mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
                 mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle);
                 svc_attributes[i].user_data = entry->data;
-            } else if (((uint64_t)(attrs_are_chrs >> i) & (uint64_t)0x01)) {
-                if (svc_attributes[i + 1].user_data == NULL) {
+            } else if (((uint64_t)(attrs_are_chrs >> i) & (uint64_t)0x01)) {    // user defined characteristics
+                if (svc_attributes[i + 1].user_data == NULL) {                  // characteristic value handle is characteristic handle plus 1
                     mp_bluetooth_gatts_db_create_entry(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle, MP_BLUETOOTH_DEFAULT_ATTR_LEN);
                     mp_bluetooth_gatts_db_entry_t *entry = mp_bluetooth_gatts_db_lookup(MP_STATE_PORT(bluetooth_zephyr_root_pointers)->gatts_db, svc_attributes[i].handle);
                     svc_attributes[i + 1].user_data = entry->data;
@@ -644,7 +617,6 @@ static void mp_bt_zephyr_gatt_indicate_done(struct bt_conn *conn, struct bt_gatt
 }
 
 static ssize_t mp_bt_zephyr_gatts_attr_read(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) {
-
     // we receive the value handle, but to look up in the gatts db we need the characteristic handle, and that is is the value handle minus 1
     uint16_t chr_handle = attr->handle - 1;
 
@@ -834,7 +806,6 @@ static struct bt_uuid *create_zephyr_uuid(const mp_obj_bluetooth_uuid_t *uuid) {
 }
 
 static void gatt_db_add(const struct bt_gatt_attr *pattern, struct bt_gatt_attr *attr, size_t user_data_len) {
-
     const union uuid_u *u = CONTAINER_OF(pattern->uuid, union uuid_u, uuid);
     size_t uuid_size = sizeof(u->u16);
 
@@ -873,7 +844,6 @@ static void add_service(const struct bt_uuid *u, struct bt_gatt_attr *attr) {
 
 static void add_characteristic(struct add_characteristic *ch, struct bt_gatt_attr *attr_chrc, struct bt_gatt_attr *attr_value) {
     struct bt_gatt_chrc *chrc_data;
-    struct gatt_value value;
 
     // Add Characteristic Declaration
     gatt_db_add(&(struct bt_gatt_attr)
@@ -881,8 +851,6 @@ static void add_characteristic(struct add_characteristic *ch, struct bt_gatt_att
                             BT_GATT_PERM_READ,
                             bt_gatt_attr_read_chrc, NULL,
                             (&(struct bt_gatt_chrc){})), attr_chrc, sizeof(*chrc_data));
-
-    (void)memset(&value, 0, sizeof(value));
 
     // Allow prepare writes
     ch->permissions |= BT_GATT_PERM_PREPARE_WRITE;
@@ -897,12 +865,6 @@ static void add_characteristic(struct add_characteristic *ch, struct bt_gatt_att
     chrc_data->properties = ch->properties;
     chrc_data->uuid = attr_value->uuid;
 }
-
-static void ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
-    // TODO
-}
-
-static struct bt_gatt_attr ccc_definition = BT_GATT_CCC(ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE);
 
 static void add_ccc(struct bt_gatt_attr *attr, struct bt_gatt_attr *attr_desc) {
     struct bt_gatt_chrc *chrc = attr->user_data;
@@ -932,14 +894,11 @@ static void add_cep(const struct bt_gatt_attr *attr_chrc, struct bt_gatt_attr *a
 }
 
 static void add_descriptor(struct bt_gatt_attr *chrc, struct add_descriptor *d, struct bt_gatt_attr *attr_desc) {
-    struct gatt_value value;
-
     if (!bt_uuid_cmp(d->uuid, BT_UUID_GATT_CEP)) {
         add_cep(chrc, attr_desc);
     } else if (!bt_uuid_cmp(d->uuid, BT_UUID_GATT_CCC)) {
         add_ccc(chrc, attr_desc);
     } else {
-        (void)memset(&value, 0, sizeof(value));
 
         // Allow prepare writes
         d->permissions |= BT_GATT_PERM_PREPARE_WRITE;
@@ -947,7 +906,7 @@ static void add_descriptor(struct bt_gatt_attr *chrc, struct add_descriptor *d, 
         gatt_db_add(&(struct bt_gatt_attr)
                     BT_GATT_DESCRIPTOR(d->uuid,
                     d->permissions & GATT_PERM_MASK,
-                    mp_bt_zephyr_gatts_attr_read, mp_bt_zephyr_gatts_attr_write, &value), attr_desc, sizeof(value));
+                    mp_bt_zephyr_gatts_attr_read, mp_bt_zephyr_gatts_attr_write, NULL), attr_desc, 0);
     }
 }
 
