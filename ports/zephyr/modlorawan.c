@@ -62,46 +62,47 @@ static const struct device *lora_dev;
 // declare local private functions
 
 static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr, uint8_t len, const uint8_t *hex_data) {
-    DEBUG_printf("Port %d, Pending %d, RSSI %ddB, SNR %ddBm", port, data_pending, rssi, snr);
+    DEBUG_printf("Port %d, Pending %d, RSSI %ddB, SNR %ddBm\n", port, data_pending, rssi, snr);
 }
 
 static void lorwan_datarate_changed(enum lorawan_datarate dr) {
     uint8_t unused, max_size;
     lorawan_get_payload_sizes(&unused, &max_size);
-    DEBUG_printf("New Datarate: DR_%d, Max Payload %d", dr, max_size);
+    DEBUG_printf("New Datarate: DR_%d, Max Payload %d\n", dr, max_size);
 }
 
 
 // define module exported functions
 
-static mp_obj_t lorawan_version(void) {
+static mp_obj_t mp_lorawan_version(void) {
     return mp_obj_new_int(1);
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(lorawan_version_obj, lorawan_version);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_version_obj, mp_lorawan_version);
 
-static mp_obj_t lorawan_init(void) {
+static mp_obj_t mp_lorawan_init(void) {
 
     int ret;
 
+    lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
     if (!device_is_ready(lora_dev)) {
-        DEBUG_printf("ERROR: %s: device not ready.", lora_dev->name);
+        DEBUG_printf("ERROR: %s: device not ready.\n", lora_dev->name);
         mp_raise_OSError(MP_ENODEV);
     }
 
-#if defined(CONFIG_LORAMAC_REGION_EU868)
-    /* If more than one region Kconfig is selected, app should set region
-        * before calling lorawan_start()
-        */
-    ret = lorawan_set_region(LORAWAN_REGION_EU868);
-    if (ret < 0) {
-        DEBUG_printf("ERROR: lorawan_set_region failed: %d", ret);
-        mp_raise_OSError(MP_ENOENT);
-    }
-    #endif
+    // #if defined(CONFIG_LORAMAC_REGION_EU868)
+    // /* If more than one region Kconfig is selected, app should set region
+    //     * before calling lorawan_start()
+    //     */
+    // ret = lorawan_set_region(LORAWAN_REGION_EU868);
+    // if (ret < 0) {
+    //     DEBUG_printf("ERROR: lorawan_set_region failed: %d", ret);
+    //     mp_raise_OSError(MP_ENOENT);
+    // }
+    // #endif
 
     ret = lorawan_start();
     if (ret < 0) {
-        DEBUG_printf("ERROR: lorawan_start failed: %d", ret);
+        DEBUG_printf("ERROR: lorawan_start failed: %d\n", ret);
         mp_raise_OSError(MP_EFAULT);
     }
 
@@ -110,9 +111,9 @@ static mp_obj_t lorawan_init(void) {
 
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(lorawan_init_obj, lorawan_init);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_init_obj, mp_lorawan_init);
 
-static mp_obj_t lorawan_join(void) {
+static mp_obj_t mp_lorawan_join(void) {
 
     struct lorawan_join_config join_cfg;
 	uint8_t dev_eui[] = LORAWAN_DEV_EUI;
@@ -127,18 +128,18 @@ static mp_obj_t lorawan_join(void) {
     join_cfg.otaa.nwk_key = app_key;
     join_cfg.otaa.dev_nonce = 0u;
 
-    DEBUG_printf("Joining network over OTAA");
+    DEBUG_printf("Joining network over OTAA\n");
     ret = lorawan_join(&join_cfg);
     if (ret < 0) {
-        DEBUG_printf("ERROR: lorawan_join_network failed: %d", ret);
+        DEBUG_printf("ERROR: lorawan_join_network failed: %d\n", ret);
         mp_raise_OSError(MP_EFAULT);
     }
 
     return mp_const_none;
 }
-static MP_DEFINE_CONST_FUN_OBJ_0(lorawan_join_obj, lorawan_join);
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_join_obj, mp_lorawan_join);
 
-static mp_obj_t lorawan_send(mp_obj_t port_o, mp_obj_t data_o) {
+static mp_obj_t mp_lorawan_send(mp_obj_t port_o, mp_obj_t data_o) {
 
     int32_t port = mp_obj_get_int(port_o);
 
@@ -154,26 +155,26 @@ static mp_obj_t lorawan_send(mp_obj_t port_o, mp_obj_t data_o) {
         * we'll just continue.
         */
     if (ret == -EAGAIN) {
-        DEBUG_printf("lorawan_send busy: %d. Try again...", ret);
+        DEBUG_printf("lorawan_send busy: %d. Try again...\n", ret);
         return mp_obj_new_int(0);
     }
 
     if (ret < 0) {
-        DEBUG_printf("lorawan_send failed: %d", ret);
+        DEBUG_printf("lorawan_send failed: %d\n", ret);
         return mp_obj_new_int(0);
     }
 
     return mp_obj_new_int(bufinfo.len);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(lorawan_send_obj, lorawan_send);
+static MP_DEFINE_CONST_FUN_OBJ_2(mp_lorawan_send_obj, mp_lorawan_send);
 
 static const mp_rom_map_elem_t lorawan_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lorawan) },
 
-    { MP_ROM_QSTR(MP_QSTR_version),                     MP_ROM_PTR(&lorawan_version_obj) },
-    { MP_ROM_QSTR(MP_QSTR_init),                        MP_ROM_PTR(&lorawan_init_obj) },
-    { MP_ROM_QSTR(MP_QSTR_join),                        MP_ROM_PTR(&lorawan_join_obj) },
-    { MP_ROM_QSTR(MP_QSTR_send),                        MP_ROM_PTR(&lorawan_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_version),                     MP_ROM_PTR(&mp_lorawan_version_obj) },
+    { MP_ROM_QSTR(MP_QSTR_init),                        MP_ROM_PTR(&mp_lorawan_init_obj) },
+    { MP_ROM_QSTR(MP_QSTR_join),                        MP_ROM_PTR(&mp_lorawan_join_obj) },
+    { MP_ROM_QSTR(MP_QSTR_send),                        MP_ROM_PTR(&mp_lorawan_send_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(lorawan_module_globals, lorawan_module_globals_table);
