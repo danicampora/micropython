@@ -5,6 +5,7 @@
  *
  * Copyright (c) 2019-2021 Damien P. George
  * Copyright (c) 2019-2020 Jim Mussared
+ * Copyright (c) 2024 Daniel Campora on behalf of REMOTE TECH LTD
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
