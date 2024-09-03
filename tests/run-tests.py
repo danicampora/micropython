@@ -637,6 +637,9 @@ def run_tests(pyb, tests, args, result_dir, num_threads=1):
         skip_tests.add("thread/thread_lock2.py")
         skip_tests.add("thread/thread_lock3.py")
         skip_tests.add("thread/thread_shared2.py")
+    elif args.target == "zephyr":
+        skip_tests.add("thread/stress_heap.py")
+        skip_tests.add("thread/thread_lock3.py")
 
     # Some tests shouldn't be run on pyboard
     if args.target != "unix":
@@ -1060,6 +1063,7 @@ the last matching regex is used:
         "qemu-arm",
         "renesas-ra",
         "rp2",
+        "zephyr",
     )
     if args.list_tests:
         pyb = None
