@@ -43,11 +43,9 @@
 
 #define DEBUG_printf(...)           printk("LoRa: " __VA_ARGS__)
 
-
-#define LORAWAN_DEV_EUI             { 0xDD, 0xEE, 0xAA, 0xDD, 0xBB, 0xEE, 0xEE, 0xFF }
-#define LORAWAN_JOIN_EUI            { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
-#define LORAWAN_APP_KEY             { 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C }
-
+#define LORAWAN_DEV_EUI             { 0xF0, 0x02, 0x20, 0x80, 0x00, 0x47, 0x7E, 0xB8 }
+#define LORAWAN_JOIN_EUI            { 0x70, 0xB3, 0xD5, 0x7E, 0xF0, 0x00, 0x3B, 0xFD }
+#define LORAWAN_APP_KEY             { 0x3C, 0xB4, 0x03, 0x99, 0x3D, 0xCB, 0x74, 0xFF, 0xD0, 0x5C, 0x01, 0x4A, 0x31, 0x4B, 0xB6, 0x94 }
 
 static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr, uint8_t len, const uint8_t *hex_data);
 static void lorwan_datarate_changed(enum lorawan_datarate dr);
@@ -58,6 +56,7 @@ static struct lorawan_downlink_cb downlink_cb = {
     .cb = dl_callback
 };
 static const struct device *lora_dev;
+static uint16_t modlorawan_dev_nonce;
 
 // declare local private functions
 
@@ -107,6 +106,8 @@ static mp_obj_t mp_lorawan_init(void) {
     lorawan_register_downlink_callback(&downlink_cb);
     lorawan_register_dr_changed_callback(lorwan_datarate_changed);
 
+    modlorawan_dev_nonce = 1;
+
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_init_obj, mp_lorawan_init);
@@ -124,7 +125,7 @@ static mp_obj_t mp_lorawan_join(void) {
     join_cfg.otaa.join_eui = join_eui;
     join_cfg.otaa.app_key = app_key;
     join_cfg.otaa.nwk_key = app_key;
-    join_cfg.otaa.dev_nonce = 0u;
+    join_cfg.otaa.dev_nonce = modlorawan_dev_nonce++;
 
     DEBUG_printf("Joining network over OTAA\n");
     ret = lorawan_join(&join_cfg);
