@@ -50,6 +50,7 @@ set(MICROPY_SOURCE_PORT
     zephyr_storage.c
     mpthreadport.c
     modlorawan.c
+    nvmc.c
 )
 list(TRANSFORM MICROPY_SOURCE_PORT PREPEND ${MICROPY_PORT_DIR}/)
 

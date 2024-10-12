@@ -106,7 +106,7 @@ static mp_obj_t mp_lorawan_init(void) {
     lorawan_register_downlink_callback(&downlink_cb);
     lorawan_register_dr_changed_callback(lorwan_datarate_changed);
 
-    modlorawan_dev_nonce = 1;
+    modlorawan_dev_nonce = 100;
 
     return mp_const_none;
 }
