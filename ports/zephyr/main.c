@@ -60,6 +60,8 @@
 #include "modmachine.h"
 #include "modzephyr.h"
 
+#include "nvmc.h"
+
 static char heap[MICROPY_HEAP_SIZE];
 
 void init_zephyr(void) {
@@ -87,6 +89,8 @@ void init_zephyr(void) {
     net_if_ipv6_addr_add(net_if_get_default(), &in6addr_my, NET_ADDR_MANUAL, 0);
     #endif
     #endif
+
+    nvmc_init();
 }
 
 #if MICROPY_VFS

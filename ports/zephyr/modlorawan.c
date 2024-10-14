@@ -40,6 +40,8 @@
 #include <zephyr/lorawan/lorawan.h>
 #include <zephyr/kernel.h>
 
+#include "nvmc.h"
+
 
 #define DEBUG_printf(...)           printk("LoRa: " __VA_ARGS__)
 
@@ -57,6 +59,7 @@ static struct lorawan_downlink_cb downlink_cb = {
 };
 static const struct device *lora_dev;
 static uint16_t modlorawan_dev_nonce;
+static bool modlorawan_init_done = false;
 
 // declare local private functions
 
@@ -73,40 +76,43 @@ static void lorwan_datarate_changed(enum lorawan_datarate dr) {
 
 // define module exported functions
 
-static mp_obj_t mp_lorawan_version(void) {
-    return mp_obj_new_int(1);
-}
-static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_version_obj, mp_lorawan_version);
-
 static mp_obj_t mp_lorawan_init(void) {
 
     int ret;
 
-    lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
-    if (!device_is_ready(lora_dev)) {
-        DEBUG_printf("ERROR: %s: device not ready.\n", lora_dev->name);
-        mp_raise_OSError(MP_ENODEV);
+    if (!modlorawan_init_done) {
+
+        lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
+        if (!device_is_ready(lora_dev)) {
+            DEBUG_printf("ERROR: %s: device not ready.\n", lora_dev->name);
+            mp_raise_OSError(MP_ENODEV);
+        }
+
+        /* If more than one region Kconfig is selected, app should set region
+            * before calling lorawan_start()
+            */
+        ret = lorawan_set_region(LORAWAN_REGION_EU868);
+        if (ret < 0) {
+            DEBUG_printf("ERROR: lorawan_set_region failed: %d", ret);
+            mp_raise_OSError(MP_ENOENT);
+        }
+
+        ret = lorawan_start();
+        if (ret < 0) {
+            DEBUG_printf("ERROR: lorawan_start failed: %d\n", ret);
+            mp_raise_OSError(MP_EFAULT);
+        }
+
+        lorawan_register_downlink_callback(&downlink_cb);
+        lorawan_register_dr_changed_callback(lorwan_datarate_changed);
+
+        uint32_t nonce;
+        nvmc_get(E_NVM_LORAWAN_DEV_NONCE, &nonce);
+        modlorawan_dev_nonce = (uint16_t)nonce;
+        DEBUG_printf("Dev Nonce is %d\n", modlorawan_dev_nonce);
+
+        modlorawan_init_done = true;
     }
-
-    /* If more than one region Kconfig is selected, app should set region
-        * before calling lorawan_start()
-        */
-    ret = lorawan_set_region(LORAWAN_REGION_EU868);
-    if (ret < 0) {
-        DEBUG_printf("ERROR: lorawan_set_region failed: %d", ret);
-        mp_raise_OSError(MP_ENOENT);
-    }
-
-    ret = lorawan_start();
-    if (ret < 0) {
-        DEBUG_printf("ERROR: lorawan_start failed: %d\n", ret);
-        mp_raise_OSError(MP_EFAULT);
-    }
-
-    lorawan_register_downlink_callback(&downlink_cb);
-    lorawan_register_dr_changed_callback(lorwan_datarate_changed);
-
-    modlorawan_dev_nonce = 100;
 
     return mp_const_none;
 }
@@ -126,6 +132,11 @@ static mp_obj_t mp_lorawan_join(void) {
     join_cfg.otaa.app_key = app_key;
     join_cfg.otaa.nwk_key = app_key;
     join_cfg.otaa.dev_nonce = modlorawan_dev_nonce++;
+
+    if (modlorawan_dev_nonce == 0) {
+        modlorawan_dev_nonce = 1;
+    }
+    nvmc_set(E_NVM_LORAWAN_DEV_NONCE, modlorawan_dev_nonce);
 
     DEBUG_printf("Joining network over OTAA\n");
     ret = lorawan_join(&join_cfg);
@@ -170,7 +181,6 @@ static MP_DEFINE_CONST_FUN_OBJ_2(mp_lorawan_send_obj, mp_lorawan_send);
 static const mp_rom_map_elem_t lorawan_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lorawan) },
 
-    { MP_ROM_QSTR(MP_QSTR_version),                     MP_ROM_PTR(&mp_lorawan_version_obj) },
     { MP_ROM_QSTR(MP_QSTR_init),                        MP_ROM_PTR(&mp_lorawan_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_join),                        MP_ROM_PTR(&mp_lorawan_join_obj) },
     { MP_ROM_QSTR(MP_QSTR_send),                        MP_ROM_PTR(&mp_lorawan_send_obj) },
