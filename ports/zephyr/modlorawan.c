@@ -39,8 +39,7 @@
 #include <zephyr/device.h>
 #include <zephyr/lorawan/lorawan.h>
 #include <zephyr/kernel.h>
-
-#include "nvmc.h"
+#include <zephyr/random/random.h>
 
 
 #define DEBUG_printf(...)           printk("LoRa: " __VA_ARGS__)
@@ -65,6 +64,14 @@ static bool modlorawan_init_done = false;
 
 static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr, uint8_t len, const uint8_t *hex_data) {
     DEBUG_printf("Port %d, Pending %d, RSSI %ddB, SNR %ddBm\n", port, data_pending, rssi, snr);
+
+    // if (len > 0) {
+    //     printf("Data: ");
+    //     for (int i = 0; i < len; i++) {
+    //         printf("%02x ", hex_data[i]);
+    //     }
+    //     printf("\n");
+    // }
 }
 
 static void lorwan_datarate_changed(enum lorawan_datarate dr) {
@@ -106,9 +113,7 @@ static mp_obj_t mp_lorawan_init(void) {
         lorawan_register_downlink_callback(&downlink_cb);
         lorawan_register_dr_changed_callback(lorwan_datarate_changed);
 
-        uint32_t nonce;
-        nvmc_get(E_NVM_LORAWAN_DEV_NONCE, &nonce);
-        modlorawan_dev_nonce = (uint16_t)nonce;
+        modlorawan_dev_nonce = sys_rand16_get();
         DEBUG_printf("Dev Nonce is %d\n", modlorawan_dev_nonce);
 
         modlorawan_init_done = true;
@@ -133,17 +138,18 @@ static mp_obj_t mp_lorawan_join(void) {
     join_cfg.otaa.nwk_key = app_key;
     join_cfg.otaa.dev_nonce = modlorawan_dev_nonce++;
 
-    if (modlorawan_dev_nonce == 0) {
-        modlorawan_dev_nonce = 1;
-    }
-    nvmc_set(E_NVM_LORAWAN_DEV_NONCE, modlorawan_dev_nonce);
-
     DEBUG_printf("Joining network over OTAA\n");
     ret = lorawan_join(&join_cfg);
     if (ret < 0) {
         DEBUG_printf("ERROR: lorawan_join_network failed: %d\n", ret);
         mp_raise_OSError(MP_EFAULT);
     }
+
+    /*
+     * Clock synchronization is required to schedule the multicast session
+     * in class C mode. It can also be used independent of FUOTA.
+     */
+    lorawan_clock_sync_run();
 
     return mp_const_none;
 }

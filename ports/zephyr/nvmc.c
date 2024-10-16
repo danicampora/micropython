@@ -92,7 +92,7 @@ void nvmc_init (void) {
             printk("NVM signature set failed!\n");
         }
 
-        if (!nvmc_set (E_NVM_LORAWAN_DEV_NONCE, 1)) {
+        if (!nvmc_set (E_NVM_LORAWAN_DEV_NONCE, 0)) {
             printk("NVM charge completed clear failed!\n");
         }
     }

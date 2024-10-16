@@ -26,13 +26,23 @@
  */
 
 #include <zephyr/kernel.h>
+#include <zephyr/lorawan/lorawan.h>
 
 #include "py/obj.h"
 
+
+#define LORAWAN_GPS_TO_UNIX_TIME_OFFSET                     315964735
+
+
 static mp_obj_t mp_time_time_get(void) {
-    /* The absence of FP support is deliberate. The Zephyr port uses
-     * single precision floats so the fraction component will start to
-     * lose precision on devices with a long uptime.
-     */
-    return mp_obj_new_int(k_uptime_get() / 1000);
+    uint32_t gps_time;
+    if (lorawan_clock_sync_get(&gps_time) < 0) {
+        /* The absence of FP support is deliberate. The Zephyr port uses
+        * single precision floats so the fraction component will start to
+        * lose precision on devices with a long uptime.
+        */
+        return mp_obj_new_int(k_uptime_get() / 1000);
+    } else {
+        return mp_obj_new_int(gps_time + LORAWAN_GPS_TO_UNIX_TIME_OFFSET);
+    }
 }
