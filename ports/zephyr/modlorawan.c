@@ -48,6 +48,9 @@
 #define LORAWAN_JOIN_EUI            { 0x70, 0xB3, 0xD5, 0x7E, 0xF0, 0x00, 0x3B, 0xFD }
 #define LORAWAN_APP_KEY             { 0x3C, 0xB4, 0x03, 0x99, 0x3D, 0xCB, 0x74, 0xFF, 0xD0, 0x5C, 0x01, 0x4A, 0x31, 0x4B, 0xB6, 0x94 }
 
+#define LORAWAN_MAX_RX_MSG_SIZE     256
+
+
 static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr, uint8_t len, const uint8_t *hex_data);
 static void lorwan_datarate_changed(enum lorawan_datarate dr);
 
@@ -60,18 +63,20 @@ static const struct device *lora_dev;
 static uint16_t modlorawan_dev_nonce;
 static bool modlorawan_init_done = false;
 
+static uint8_t modlorawan_rx_buffer[LORAWAN_MAX_RX_MSG_SIZE];
+static uint8_t modlorawan_rx_port;
+static uint32_t modlorawan_rx_msg_len;
+
+
 // declare local private functions
 
 static void dl_callback(uint8_t port, bool data_pending, int16_t rssi, int8_t snr, uint8_t len, const uint8_t *hex_data) {
     DEBUG_printf("Port %d, Pending %d, RSSI %ddB, SNR %ddBm\n", port, data_pending, rssi, snr);
-
-    // if (len > 0) {
-    //     printf("Data: ");
-    //     for (int i = 0; i < len; i++) {
-    //         printf("%02x ", hex_data[i]);
-    //     }
-    //     printf("\n");
-    // }
+    if ((len > 0) && (len <= LORAWAN_MAX_RX_MSG_SIZE) && (port > 0) && (port < 200)) {
+        memcpy(modlorawan_rx_buffer, hex_data, len);
+        modlorawan_rx_port = port;
+        modlorawan_rx_msg_len = len;
+    }
 }
 
 static void lorwan_datarate_changed(enum lorawan_datarate dr) {
@@ -117,6 +122,7 @@ static mp_obj_t mp_lorawan_init(void) {
         DEBUG_printf("Dev Nonce is %d\n", modlorawan_dev_nonce);
 
         modlorawan_init_done = true;
+        modlorawan_rx_msg_len = 0;
     }
 
     return mp_const_none;
@@ -155,34 +161,52 @@ static mp_obj_t mp_lorawan_join(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_join_obj, mp_lorawan_join);
 
-static mp_obj_t mp_lorawan_send(mp_obj_t port_o, mp_obj_t data_o) {
+static mp_obj_t mp_lorawan_send(mp_obj_t data_o, mp_obj_t port_o, mp_obj_t confirmed_o) {
 
     int32_t port = mp_obj_get_int(port_o);
 
     mp_buffer_info_t bufinfo;
     mp_get_buffer_raise(data_o, &bufinfo, MP_BUFFER_READ);
 
-    int ret = lorawan_send(port, bufinfo.buf, bufinfo.len, LORAWAN_MSG_CONFIRMED);
+    int ret = lorawan_send(port, bufinfo.buf, bufinfo.len, mp_obj_is_true(confirmed_o) ? LORAWAN_MSG_CONFIRMED : LORAWAN_MSG_UNCONFIRMED);
 
     /*
         * Note: The stack may return -EAGAIN if the provided data
         * length exceeds the maximum possible one for the region and
-        * datarate. But since we are just sending the same data here,
-        * we'll just continue.
+        * datarate.
         */
     if (ret == -EAGAIN) {
         DEBUG_printf("lorawan_send busy: %d. Try again...\n", ret);
-        return mp_obj_new_int(0);
+        mp_raise_OSError(EAGAIN);
     }
 
     if (ret < 0) {
         DEBUG_printf("lorawan_send failed: %d\n", ret);
-        return mp_obj_new_int(0);
+        return mp_raise_OSError(ret);
     }
 
     return mp_obj_new_int(bufinfo.len);
 }
-static MP_DEFINE_CONST_FUN_OBJ_2(mp_lorawan_send_obj, mp_lorawan_send);
+static MP_DEFINE_CONST_FUN_OBJ_3(mp_lorawan_send_obj, mp_lorawan_send);
+
+static mp_obj_t mp_lorawan_recv(void) {
+
+    if (modlorawan_rx_msg_len > 0) {
+        vstr_t vstr;
+        vstr_init_len(&vstr, modlorawan_rx_msg_len);
+
+        memcpy(vstr.buf, modlorawan_rx_buffer, modlorawan_rx_msg_len);
+        modlorawan_rx_msg_len = 0;
+
+        mp_obj_t tuple[2] = {
+            tuple[0] = mp_obj_new_bytes_from_vstr(&vstr),
+            tuple[1] = mp_obj_new_int(modlorawan_rx_port),
+        };
+        return mp_obj_new_tuple(2, tuple);
+    }
+    return mp_const_empty_tuple;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_recv_obj, mp_lorawan_recv);
 
 static const mp_rom_map_elem_t lorawan_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_lorawan) },
@@ -190,6 +214,7 @@ static const mp_rom_map_elem_t lorawan_module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_init),                        MP_ROM_PTR(&mp_lorawan_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_join),                        MP_ROM_PTR(&mp_lorawan_join_obj) },
     { MP_ROM_QSTR(MP_QSTR_send),                        MP_ROM_PTR(&mp_lorawan_send_obj) },
+    { MP_ROM_QSTR(MP_QSTR_recv),                        MP_ROM_PTR(&mp_lorawan_recv_obj) },
 };
 
 static MP_DEFINE_CONST_DICT(lorawan_module_globals, lorawan_module_globals_table);
