@@ -146,6 +146,8 @@ soft_reset:
     pyexec_file_if_exists("main.py");
     #endif
 
+    // printf("Updated firmware\n");
+
     for (;;) {
         if (pyexec_mode_kind == PYEXEC_MODE_RAW_REPL) {
             if (pyexec_raw_repl() != 0) {
