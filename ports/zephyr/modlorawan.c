@@ -182,7 +182,7 @@ static mp_obj_t mp_lorawan_send(mp_obj_t data_o, mp_obj_t port_o, mp_obj_t confi
 
     if (ret < 0) {
         DEBUG_printf("lorawan_send failed: %d\n", ret);
-        return mp_raise_OSError(ret);
+        mp_raise_OSError(ret);
     }
 
     return mp_obj_new_int(bufinfo.len);
