@@ -3,8 +3,7 @@
  *
  * The MIT License (MIT)
  *
- * Copyright (c) 2013, 2014 Damien P. George
- * Copyright (c) 2016 Linaro Limited
+ * Copyright (c) 2024 Daniel Campora on behalf of REMOTE TECH LTD
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,24 +24,35 @@
  * THE SOFTWARE.
  */
 
-#include <zephyr/kernel.h>
-#include <zephyr/lorawan/lorawan.h>
+#ifndef NVMC_H
+#define NVMC_H
 
-#include "py/obj.h"
-
-
-#define LORAWAN_GPS_TO_UNIX_TIME_OFFSET                     315964775
+#include <stdint.h>
 
 
-static mp_obj_t mp_time_time_get(void) {
-    uint32_t gps_time;
-    if (lorawan_clock_sync_get(&gps_time) < 0) {
-        /* The absence of FP support is deliberate. The Zephyr port uses
-        * single precision floats so the fraction component will start to
-        * lose precision on devices with a long uptime.
-        */
-        return mp_obj_new_int(k_uptime_get() / 1000);
-    } else {
-        return mp_obj_new_int(gps_time + LORAWAN_GPS_TO_UNIX_TIME_OFFSET);
-    }
-}
+// define constants
+
+#define NVMC_SIGNAUTRE_VALUE                    0x5791ABCD
+
+
+// define types
+
+typedef enum {
+
+    E_NVM_SIGNATURE = 0,
+    E_NVM_LORAWAN_DEV_NONCE
+
+} teNvmElement;
+
+
+// declare public functions
+
+void nvmc_init (void);
+
+bool nvmc_set (teNvmElement element, uint32_t value);
+
+bool nvmc_get (teNvmElement element, uint32_t *value);
+
+
+#endif  // NVMC_H
+

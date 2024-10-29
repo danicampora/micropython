@@ -60,6 +60,7 @@
 #include "modmachine.h"
 #include "modzephyr.h"
 
+
 static char heap[MICROPY_HEAP_SIZE];
 
 void init_zephyr(void) {
