@@ -27,3 +27,10 @@ class Probe:
         id_0, id_1, id_2, id_3, id_4, id_5, id_6, id_7, ver_0, ver_1, ver_2, reading_len, battery_level = struct.unpack(PROTOCOL_RESPONSE_DEV_INFO_FORMAT, _dev_info_packed)
         print('Device ID is {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(id_7, id_6, id_5, id_4, id_3, id_2, id_1, id_0)) 
         print('FW version is {}.{}.{}'.format(ver_0, ver_1, ver_2))
+
+    def _get_reading(self):
+        request = self._create_request_header(E_PROTOCOL_GET_READING, 0)
+        _dev_info_packed = self._data_transfer(request, struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT) + struct.calcsize(PROTOCOL_RESPONSE_READING_T1_FORMAT))
+        _dev_info_packed = _dev_info_packed[struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT):]
+        _temperature, _triggered = struct.unpack(PROTOCOL_RESPONSE_READING_T1_FORMAT, _dev_info_packed)
+        print('T1 temperature value is: {:.2f} triggered: {}'.format(_temperature, True if _triggered else False))
