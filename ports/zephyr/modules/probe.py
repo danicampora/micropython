@@ -11,7 +11,7 @@ PROBE_I2C_ADDR = const(0x7E)
 class Probe:
 
     def __init__(self):     
-        self.i2c = I2C(1, scl=Pin(36), sda=Pin(35), freq=50000)
+        self.i2c = I2C("i2c0")
 
     def _data_transfer(self, tx_buf, rx_len):
         self.i2c.writeto(PROBE_I2C_ADDR, tx_buf)
