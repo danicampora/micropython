@@ -31,6 +31,11 @@ set(MICROPY_PORT_DIR    ${CMAKE_CURRENT_SOURCE_DIR})
 set(MICROPY_DIR         ${MICROPY_PORT_DIR}/../..)
 set(MICROPY_TARGET      micropython)
 
+message(MICROPY_PORT_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+message(MICROPY_DIR="${MICROPY_DIR}")
+message(ZEPHYR_BASE="$ENV{ZEPHYR_BASE}")
+message(CMAKE_CURRENT_BINARY_DIR="${CMAKE_CURRENT_BINARY_DIR}")
+
 include(${MICROPY_DIR}/py/py.cmake)
 include(${MICROPY_DIR}/extmod/extmod.cmake)
 
@@ -87,15 +92,22 @@ zephyr_get_system_include_directories_for_lang(C system_includes)
 zephyr_get_compile_definitions_for_lang(C definitions)
 zephyr_get_compile_options_for_lang(C options)
 
-set(MICROPY_CPP_FLAGS_EXTRA ${includes} ${system_includes} ${definitions} ${options})
-
 zephyr_library_named(${MICROPY_TARGET})
 
 zephyr_library_include_directories(
     ${MICROPY_INC_CORE}
     ${MICROPY_PORT_DIR}
     ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated
+    ../../generated
 )
+
+zephyr_include_directories(
+    ${CMAKE_CURRENT_BINARY_DIR}/zephyr/include/generated
+    ../../generated
+)
+
+set(MICROPY_CPP_FLAGS_EXTRA ${includes} ${system_includes} ${definitions} ${options} ${zephyr_include_directories})
 
 zephyr_library_compile_options(
     -std=gnu99 -fomit-frame-pointer
@@ -114,9 +126,25 @@ zephyr_library_compile_definitions(
 zephyr_library_sources(${MICROPY_SOURCE_QSTR})
 zephyr_library_link_libraries(kernel)
 
-add_dependencies(${MICROPY_TARGET} zephyr_generated_headers)
+add_dependencies(${MICROPY_TARGET} 
+    zephyr_interface
+    zephyr_generated_headers
+)
+
+# Save the manifest file set from the cmake command line.
+set(MICROPY_USER_FROZEN_MANIFEST ${MICROPY_FROZEN_MANIFEST})
+
+# Set the frozen manifest file. Note if MICROPY_FROZEN_MANIFEST is set from the cmake
+# command line, then it will override the default and any manifest set by the board.
+if (MICROPY_USER_FROZEN_MANIFEST)
+    set(MICROPY_FROZEN_MANIFEST ${MICROPY_USER_FROZEN_MANIFEST})
+elseif (NOT MICROPY_FROZEN_MANIFEST)
+    set(MICROPY_FROZEN_MANIFEST ${CMAKE_CURRENT_LIST_DIR}/boards/manifest.py)
+endif()
 
 include(${MICROPY_DIR}/py/mkrules.cmake)
+
+add_dependencies(${BUILD_FROZEN_CONTENT} zephyr_generated_headers)
 
 target_sources(app PRIVATE
     src/zephyr_start.c
