@@ -62,6 +62,7 @@ static struct lorawan_downlink_cb downlink_cb = {
 static const struct device *lora_dev;
 static uint16_t modlorawan_dev_nonce;
 static bool modlorawan_init_done = false;
+static bool modlorawan_joined = false;
 
 static uint8_t modlorawan_rx_buffer[LORAWAN_MAX_RX_MSG_SIZE];
 static uint8_t modlorawan_rx_port;
@@ -157,9 +158,19 @@ static mp_obj_t mp_lorawan_join(void) {
      */
     lorawan_clock_sync_run();
 
+    modlorawan_joined = true;
+
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_join_obj, mp_lorawan_join);
+
+static mp_obj_t mp_lorawan_has_joined(void) {
+    if (modlorawan_joined) {
+        return mp_const_true;
+    }
+    return mp_const_false;
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mp_lorawan_has_joined_obj, mp_lorawan_has_joined);
 
 static mp_obj_t mp_lorawan_send(mp_obj_t data_o, mp_obj_t port_o, mp_obj_t confirmed_o) {
 
@@ -213,6 +224,7 @@ static const mp_rom_map_elem_t lorawan_module_globals_table[] = {
 
     { MP_ROM_QSTR(MP_QSTR_init),                        MP_ROM_PTR(&mp_lorawan_init_obj) },
     { MP_ROM_QSTR(MP_QSTR_join),                        MP_ROM_PTR(&mp_lorawan_join_obj) },
+    { MP_ROM_QSTR(MP_QSTR_has_joined),                  MP_ROM_PTR(&mp_lorawan_has_joined_obj) },
     { MP_ROM_QSTR(MP_QSTR_send),                        MP_ROM_PTR(&mp_lorawan_send_obj) },
     { MP_ROM_QSTR(MP_QSTR_recv),                        MP_ROM_PTR(&mp_lorawan_recv_obj) },
 };
