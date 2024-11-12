@@ -137,7 +137,7 @@ class IoTCore:
                 _rx_packet = lorawan.recv()
                 if _rx_packet:
                     pass
-                    # process the packet here    
+                    # process the packet here
 
     def _prepare_header(self, mssg_id, port_number, msg_type):
         return struct.pack(UPLINK_HEADER_FORMAT, mssg_id, port_number, msg_type, time.time())
@@ -147,12 +147,17 @@ class IoTCore:
             lorawan.send(packet, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_LORAWAN_TX_CONFIRMED)
             # maybe: time.sleep(1)
 
+    def is_ready(self):
+        return lorawan.has_joined()
+
     def send_ping(self):
-        _packet = self._prepare_header(0, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_MODULE_PORT, PING_MSG_TYPE)
-        _packet += struct.pack(MODULE_PING_UPLINK_FORMAT, 97.77, 3.67)  # TODO: Must send real battery percentage and voltage
+        _packet = struct.pack('!B', 1)
+        _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PING_MSG_TYPE)
+        _packet += struct.pack(MODULE_PING_UPLINK_FORMAT, 97.77, 3670)  # TODO: Must send real battery percentage and voltage
         self._send_packet(_packet)
 
     def send_sensor_data(self, temperature, trigger_type):
-        _packet = self._prepare_header(0, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_MODULE_PORT, SENSOR_DATA_MSG_TYPE)
+        _packet = struct.pack('!B', 1)
+        _packet += self._prepare_header(0, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_MODULE_PORT, SENSOR_DATA_MSG_TYPE)
         _packet += struct.pack(SENSOR_DATA_FORMAT, temperature, trigger_type)
         self._send_packet(_packet)
