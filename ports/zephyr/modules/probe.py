@@ -26,6 +26,15 @@ class Settings:
         self.dummy = 0
 
 
+class Information:
+
+    def __init__(self, id, version, reading_len, battery_level):
+        self.id = id
+        self.version = version
+        self.reading_len = reading_len
+        self.battery_level = battery_level
+
+
 class Probe:
 
     def __init__(self):     
@@ -70,15 +79,18 @@ class Probe:
         _dev_info_packed = self._data_transfer(request, struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT) + struct.calcsize(PROTOCOL_RESPONSE_DEV_INFO_FORMAT))
         _dev_info_packed = _dev_info_packed[struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT):]
         id_0, id_1, id_2, id_3, id_4, id_5, id_6, id_7, ver_0, ver_1, ver_2, reading_len, battery_level = struct.unpack(PROTOCOL_RESPONSE_DEV_INFO_FORMAT, _dev_info_packed)
-        print('Device ID is {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(id_7, id_6, id_5, id_4, id_3, id_2, id_1, id_0)) 
-        print('FW version is {}.{}.{}'.format(ver_0, ver_1, ver_2))
+        return Information(struct.pack('!BBBBBBBB', id_7, id_6, id_5, id_4, id_3, id_2, id_1, id_0, ver_0), struct.pack('!BBB', ver_0, ver_1, ver_2), reading_len, battery_level)
+        #return (id_7, id_6, id_5, id_4, id_3, id_2, id_1, id_0, ver_0, ver_1, ver_2, reading_len, battery_level)
+        #print('Device ID is {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}'.format(id_7, id_6, id_5, id_4, id_3, id_2, id_1, id_0))
+        #print('FW version is {}.{}.{}'.format(ver_0, ver_1, ver_2))
 
     def get_reading(self, port):
         request = self._create_request_header(E_PROTOCOL_GET_READING, 0)
         _reading_packed = self._data_transfer(request, struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT) + struct.calcsize(PROTOCOL_RESPONSE_READING_T1_FORMAT))
         _reading_packed = _reading_packed[struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT):]
         _temperature, _triggered = struct.unpack(PROTOCOL_RESPONSE_READING_T1_FORMAT, _reading_packed)
-        print('T1 temperature value is: {:.2f} triggered: {}'.format(_temperature, True if _triggered else False))
+        return (_temperature, _triggered)
+        #print('T1 temperature value is: {:.2f} triggered: {}'.format(_temperature, True if _triggered else False))
 
     def get_min_reading(self, port):
         return self._perform_request(E_PROTOCOL_GET_MIN_READING, None, PROTOCOL_RESPONSE_MIN_MAX_READING_T1_FORMAT, port)
