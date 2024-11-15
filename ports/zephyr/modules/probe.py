@@ -11,8 +11,8 @@ PROBE_I2C_ADDR = const(0x7E)
 
 class Settings:
 
-    def __init__(self, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max):
-        self.updated_at = 0
+    def __init__(self, updated_at, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max):
+        self.updated_at = updated_at
         self.cycle = cycle
         self.trigger_from = trigger_from
         self.trigger_to = trigger_to
@@ -56,7 +56,10 @@ class Probe:
         _response_header = _response_packed[:struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT)]
         _result, _response_payload_len = struct.unpack(PROTOCOL_RESPONSE_HEADER_FORMAT, _response_header)
         _response_packed = _response_packed[struct.calcsize(PROTOCOL_RESPONSE_HEADER_FORMAT):]
-        return (True if _result == 0 else False), struct.unpack(response_payload_format, _response_packed)
+        if _result == 0:
+            return struct.unpack(response_payload_format, _response_packed)
+        else:
+            return None
 
     def set_device_id(self, id, port):
         id = binascii.unhexlify(id)
@@ -99,7 +102,11 @@ class Probe:
         return self._perform_request(E_PROTOCOL_GET_MAX_READING, None, PROTOCOL_RESPONSE_MIN_MAX_READING_T1_FORMAT, port)
 
     def get_device_settings(self, port):
-        return self._perform_request(E_PROTOCOL_GET_SETTINGS, None, PROTOCOL_RESPONSE_SETTINGS_FORMAT, port)
+        try:
+            updated_at, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max, offline_updated, dummy = self._perform_request(E_PROTOCOL_GET_SETTINGS, None, PROTOCOL_RESPONSE_SETTINGS_FORMAT, port)
+            return Settings(updated_at, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max, offline_updated)
+        except Exception:
+            return None
 
     def set_device_settings(self, settings, port):
         settings.updated_at = time.time()

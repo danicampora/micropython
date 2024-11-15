@@ -1,7 +1,11 @@
 import iotcore
+import probe
 import time
 
-iot = iotcore.IoTCore()
+
+prb = probe.Probe()
+iot = iotcore.IoTCore(prb)
+
 
 while True:
     if iot.is_ready():
