@@ -11,7 +11,7 @@ PROBE_I2C_ADDR = const(0x7E)
 
 class Settings:
 
-    def __init__(self, updated_at, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max):
+    def __init__(self, updated_at, cycle, trigger_from, trigger_to, operating_from, operating_to, trigger_delay, mode, trigger_window, sampling, min_max, offline_updated):
         self.updated_at = updated_at
         self.cycle = cycle
         self.trigger_from = trigger_from
@@ -23,6 +23,7 @@ class Settings:
         self.trigger_window = trigger_window
         self.sampling = sampling
         self.min_max = min_max
+        self.offline_updated = offline_updated
         self.dummy = 0
 
 
