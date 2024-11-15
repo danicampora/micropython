@@ -25,24 +25,48 @@
  * THE SOFTWARE.
  */
 
+#include <time.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/lorawan/lorawan.h>
 
 #include "py/obj.h"
+#include "shared/timeutils/timeutils.h"
 
 
 #define LORAWAN_GPS_TO_UNIX_TIME_OFFSET                     315964775
 
 
-static mp_obj_t mp_time_time_get(void) {
+static time_t _seconds_time_get(void) {
     uint32_t gps_time;
     if (lorawan_clock_sync_get(&gps_time) < 0) {
         /* The absence of FP support is deliberate. The Zephyr port uses
         * single precision floats so the fraction component will start to
         * lose precision on devices with a long uptime.
         */
-        return mp_obj_new_int(k_uptime_get() / 1000);
+        return k_uptime_get() / 1000;
     } else {
-        return mp_obj_new_int(gps_time + LORAWAN_GPS_TO_UNIX_TIME_OFFSET);
+        return gps_time + LORAWAN_GPS_TO_UNIX_TIME_OFFSET;
     }
+}
+
+// Return the localtime as an 8-tuple.
+static mp_obj_t mp_time_localtime_get(void) {
+    timeutils_struct_time_t tm;
+    timeutils_seconds_since_epoch_to_struct_time(_seconds_time_get(), &tm);
+    mp_obj_t tuple[8] = {
+        tuple[0] = mp_obj_new_int(tm.tm_year),
+        tuple[1] = mp_obj_new_int(tm.tm_mon),
+        tuple[2] = mp_obj_new_int(tm.tm_mday),
+        tuple[3] = mp_obj_new_int(tm.tm_hour),
+        tuple[4] = mp_obj_new_int(tm.tm_min),
+        tuple[5] = mp_obj_new_int(tm.tm_sec),
+        tuple[6] = mp_obj_new_int(tm.tm_wday),
+        tuple[7] = mp_obj_new_int(tm.tm_yday),
+    };
+    return mp_obj_new_tuple(8, tuple);
+}
+
+static mp_obj_t mp_time_time_get(void) {
+    return mp_obj_new_int_from_ull(_seconds_time_get());
 }
