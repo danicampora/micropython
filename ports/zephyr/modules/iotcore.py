@@ -138,10 +138,12 @@ class IoTCore:
                 except Exception:
                     time.sleep_ms(2000)
             else:
+                print('Trying to receive a packet...')
                 _rx_packet = lorawan.recv()
                 if _rx_packet:
+                    print('LoRa packet received:', _rx_packet)
                     self._process_rx_data(_rx_packet)
-                time.sleep_ms(50)
+                time.sleep_ms(500)
 
     def _process_rx_data(self, rx_data):
         _header = rx_data[:struct.calcsize(DOWNLINK_HEADER_FORMAT)]
@@ -149,21 +151,29 @@ class IoTCore:
         _message_id, _port_number, _message_type = struct.unpack(_header, DOWNLINK_HEADER_FORMAT)
         if _port_number == 0:
             if _message_type == REQUEST_DEVICE_INFORMATION_MSG_TYPE:
-                 self.send_device_information_reply(_message_id, 97.77, 3670)
+                 print('Device information reply request received')
+                 self.send_device_information_reply(_message_id, 97.77, 1, 3670)
             elif _message_type == REQUEST_PORT_UTILIZATION_MSG_TYPE:
+                 print('Port utilization reply request received')
                  self.send_port_utilization_reply(_message_id, IOTCORE_MAX_SENSORS, 0b01)
             elif _message_type == REQUEST_SETTINGS_MSG_TYPE:
+                 print('Request settings received')
                  self.send_settings_reply(_message_id, 60, 1)
             elif _message_type == UPDATE_SETTINGS_MSG_TYPE:
+                 print('Update settings received')
                  self.send_settings_updated(_message_id, True)
             elif _message_type == RESTART_DEVICE_MSG_TYPE:
+                 print('Restart device received')
                  self.send_device_restarted(_message_id, True)
         else:
             if _message_type == SENSOR_REQUEST_DEVICE_INFORMATION_MSG_TYPE:
+                 print('Sensor information reply request received')
                  self.send_sensor_information_reply(_message_id, _port_number)
             elif _message_type == SENSOR_UPDATE_SETTINGS_MSG_TYPE:
+                 print('Sensor update settings request received')
                  self.send_sensor_settings_updated(_message_id, _port_number, True)
             elif _message_type == SENSOR_REQUEST_SETTINGS_MSG_TYPE:
+                 print('Sensor request settings received')
                  self.send_sensor_settings_reply(_message_id, _port_number, False)
 
     def _prepare_header(self, mssg_id, port_number, msg_type):
@@ -171,7 +181,7 @@ class IoTCore:
 
     def _send_packet(self, packet):
         with self.lock:
-            lorawan.send(packet, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_LORAWAN_TX_CONFIRMED)
+            return True if (lorawan.send(packet, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_LORAWAN_TX_CONFIRMED) > 0) else False
 
     def is_ready(self):
         return lorawan.has_joined()
@@ -180,64 +190,64 @@ class IoTCore:
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PING_MSG_TYPE)
         _packet += struct.pack(MODULE_PING_UPLINK_FORMAT, charge, voltage)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_sensor_data(self, temperature, trigger_type):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_MODULE_PORT, SENSOR_DATA_MSG_TYPE)
         _packet += struct.pack(SENSOR_DATA_FORMAT, temperature, trigger_type)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_device_information_reply(self, msg_id, charge, connected_sensors, voltage):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, DEVICE_INFORMATION_REPLY_MSG_TYPE)
         _packet += struct.pack(MODULE_DEVICE_INFORMATION_UPLINK_FORMAT, DEVICE_MODEL_M1,
-                               int(version.FW_VERSION_NUM[1]), int(version.FW_VERSION_NUM[2]), int(version.FW_VERSION_NUM[3]),
+                               int(version.FW_VERSION_NUM[0]), int(version.FW_VERSION_NUM[2]), int(version.FW_VERSION_NUM[4]),
                                charge, connected_sensors, voltage)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_port_utilization_reply(self, msg_id, bitmap_len, ports_used):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, PORT_UTILIZATION_REPLY_MSG_TYPE)
         _packet += struct.pack(MODULE_PORT_UTILIZATION_UPLINK_FORMAT, bitmap_len, ports_used)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_port_occupied(self, port_number, sensor_id):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PORT_OCCUPIED_MSG_TYPE)
         _packet += struct.pack(MODULE_PORT_OCCUPIED_UPLINK_FORMAT, port_number, sensor_id)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_port_freed(self, port_number):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PORT_FREED_MSG_TYPE)
         _packet += struct.pack(MODULE_PORT_FREED_UPLINK_FORMAT, port_number)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_settings_reply(self, msg_id, cycle, operating_mode):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, SETTINGS_REPLY_MSG_TYPE)
         _packet += struct.pack(MODULE_SETTINGS_UPLINK_FORMAT, cycle, operating_mode)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_settings_updated(self, msg_id, updated):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, SETTINGS_UPDATED_MSG_TYPE)
         _packet += struct.pack(MODULE_SETTINGS_UPDATED_UPLINK_FORMAT, updated)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_device_restarted(self, msg_id, restarted):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, DEVICE_RESTARTED_MSG_TYPE)
         _packet += struct.pack(MODULE_RESTARTED_UPLINK_FORMAT, restarted)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_sensor_information_reply(self, msg_id, port):
         information = self.probe.get_device_information(port)
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, port, SENSOR_DEVICE_INFORMATION_MSG_TYPE)
         _packet += information.version + struct.pack('!B', information.battery_level) + information.id
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_sensor_settings_reply(self, msg_id, port, update_iot_core):
         msg_type = SENSOR_REPORT_SETTINGS_MSG_TYPE
@@ -249,10 +259,10 @@ class IoTCore:
         _packet += struct.pack(SENSOR_REPORT_SETTINGS_FORMAT, settings.cycle, settings.trigger_from,
                                settings.trigger_to, settings.operating_from, settings.operating_to, settings.trigger_delay, settings.mode,
                                settings.trigger_window, settings.sampling, settings.min_max)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
 
     def send_sensor_settings_updated(self, msg_id, port, updated):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, port, SENSOR_SETTINGS_UPDATED_MSG_TYPE)
         _packet += struct.pack(SENSOR_SETTINGS_UPDATED_FORMAT, updated)
-        self._send_packet(_packet)
+        return self._send_packet(_packet)
