@@ -124,6 +124,10 @@ static mp_obj_t mp_lorawan_init(void) {
 
         modlorawan_init_done = true;
         modlorawan_rx_msg_len = 0;
+
+        lorawan_enable_adr(false);
+        lorawan_set_datarate(LORAWAN_DR_5);
+        lorawan_set_conf_msg_tries(3);
     }
 
     return mp_const_none;

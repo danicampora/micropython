@@ -138,7 +138,6 @@ class IoTCore:
                 except Exception:
                     time.sleep_ms(2000)
             else:
-                print('Trying to receive a packet...')
                 _rx_packet = lorawan.recv()
                 if _rx_packet:
                     print('LoRa packet received:', _rx_packet)
@@ -192,12 +191,6 @@ class IoTCore:
         _packet += struct.pack(MODULE_PING_UPLINK_FORMAT, charge, voltage)
         return self._send_packet(_packet)
 
-    def send_sensor_data(self, temperature, trigger_type):
-        _packet = struct.pack('!B', 1)
-        _packet += self._prepare_header(0, IOTCORE_LORAWAN_PORT_NUM, IOTCORE_MODULE_PORT, SENSOR_DATA_MSG_TYPE)
-        _packet += struct.pack(SENSOR_DATA_FORMAT, temperature, trigger_type)
-        return self._send_packet(_packet)
-
     def send_device_information_reply(self, msg_id, charge, connected_sensors, voltage):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(msg_id, IOTCORE_MODULE_PORT, DEVICE_INFORMATION_REPLY_MSG_TYPE)
@@ -212,16 +205,25 @@ class IoTCore:
         _packet += struct.pack(MODULE_PORT_UTILIZATION_UPLINK_FORMAT, bitmap_len, ports_used)
         return self._send_packet(_packet)
 
-    def send_port_occupied(self, port_number, sensor_id):
+    def send_port_occupied(self, port):
+        information = self.probe.get_device_information(port)
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PORT_OCCUPIED_MSG_TYPE)
-        _packet += struct.pack(MODULE_PORT_OCCUPIED_UPLINK_FORMAT, port_number, sensor_id)
+        _packet += struct.pack('!B', port)
+        _packet += information.id
         return self._send_packet(_packet)
 
-    def send_port_freed(self, port_number):
+    def send_port_freed(self, port):
         _packet = struct.pack('!B', 1)
         _packet += self._prepare_header(0, IOTCORE_MODULE_PORT, PORT_FREED_MSG_TYPE)
-        _packet += struct.pack(MODULE_PORT_FREED_UPLINK_FORMAT, port_number)
+        _packet += struct.pack(MODULE_PORT_FREED_UPLINK_FORMAT, port)
+        return self._send_packet(_packet)
+
+    def send_sensor_data(self, port):
+        temperature, trigger_type = self.probe.get_reading(port)
+        _packet = struct.pack('!B', 1)
+        _packet += self._prepare_header(0, port, SENSOR_DATA_MSG_TYPE)
+        _packet += struct.pack(SENSOR_DATA_FORMAT, temperature, trigger_type)
         return self._send_packet(_packet)
 
     def send_settings_reply(self, msg_id, cycle, operating_mode):
