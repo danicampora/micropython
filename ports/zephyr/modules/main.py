@@ -6,8 +6,22 @@ import time
 prb = probe.Probe()
 print('Probe Initialized...')
 time.sleep(1)
-iot = iotcore.IoTCore(prb)
+try:
+    print(prb.get_device_information(1))
+except Exception:
+    pass
+time.sleep(0.5)
+try:
+    print(prb.get_device_information(1))
+except Exception:
+    pass
+time.sleep(0.5)
+try:
+    print(prb.get_device_information(1))
+except Exception:
+    pass
 
+iot = iotcore.IoTCore(prb)
 
 while True:
     if iot.is_ready():
