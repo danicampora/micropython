@@ -6,6 +6,12 @@ import time
 prb = probe.Probe()
 print('Probe Initialized...')
 time.sleep(1)
+
+try:
+    print(prb.get_device_information(1))
+except Exception:
+    pass
+time.sleep(0.5)
 try:
     print(prb.get_device_information(1))
 except Exception:
