@@ -27,6 +27,7 @@
 #include "py/mpconfig.h"
 #include "py/runtime.h"
 #include "py/stream.h"
+#include "extmod/misc.h"
 #include "src/zephyr_getchar.h"
 // Zephyr headers
 #include <zephyr/kernel.h>
@@ -68,6 +69,11 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
     if (poll_flags & MP_STREAM_POLL_WR) {
         ret |= MP_STREAM_POLL_WR;
     }
+
+    #if MICROPY_PY_OS_DUPTERM
+    ret |= mp_os_dupterm_poll(poll_flags);
+    #endif
+
     return ret;
 }
 
@@ -75,6 +81,14 @@ uintptr_t mp_hal_stdio_poll(uintptr_t poll_flags) {
 int mp_hal_stdin_rx_chr(void) {
     for (;;) {
         int _chr;
+
+        #if MICROPY_PY_OS_DUPTERM
+        _chr = mp_os_dupterm_rx_chr();
+        if (_chr >= 0) {
+            return _chr;
+        }
+        #endif
+
         #ifdef CONFIG_CONSOLE_SUBSYS
         _chr = mp_console_getchar();
         #else
@@ -90,9 +104,11 @@ int mp_hal_stdin_rx_chr(void) {
 // Send string of given length
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     mp_uint_t ret = len;
+    mp_uint_t console_len = len;
+    const char *console_str = str;
     #ifdef CONFIG_CONSOLE_SUBSYS
-    while (len--) {
-        char c = *str++;
+    while (console_len--) {
+        char c = *console_str++;
         while (mp_console_putchar(c) == -1) {
             MICROPY_EVENT_POLL_HOOK
         }
@@ -101,10 +117,18 @@ mp_uint_t mp_hal_stdout_tx_strn(const char *str, mp_uint_t len) {
     static const struct device *uart_console_dev =
         DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 
-    while (len--) {
-        uart_poll_out(uart_console_dev, *str++);
+    while (console_len--) {
+        uart_poll_out(uart_console_dev, *console_str++);
     }
     #endif
+
+    #if MICROPY_PY_OS_DUPTERM
+    int dupterm_res = mp_os_dupterm_tx_strn(str, len);
+    if (dupterm_res >= 0) {
+        ret = MIN((mp_uint_t)dupterm_res, ret);
+    }
+    #endif
+
     return ret;
 }
 
