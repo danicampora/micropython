@@ -33,7 +33,7 @@
 
 // Use the basic configuration level to get a balance between size and features.
 #ifndef MICROPY_CONFIG_ROM_LEVEL
-#define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_BASIC_FEATURES)
+#define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES)
 #endif
 
 // Usually passed from Makefile
@@ -111,6 +111,7 @@
 #define MICROPY_ENABLE_SCHEDULER    (1)
 #define MICROPY_VFS                 (1)
 #define MICROPY_READER_VFS          (MICROPY_VFS)
+#define MICROPY_PY_OS_DUPTERM       (1)
 
 // fatfs configuration used in ffconf.h
 #define MICROPY_FATFS_ENABLE_LFN       (1)
